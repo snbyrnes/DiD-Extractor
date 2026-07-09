@@ -344,7 +344,8 @@
           </div>
           <div class="right">
             <button class="ghost" id="copyBtn">Copy view</button>
-            <button class="ghost" id="dl">Download CSV</button>
+            <button class="ghost" id="dl">CSV</button>
+            <button class="primary" id="xlsx">Download Excel</button>
           </div>
         </div>
         <div class="tablewrap"><table id="tbl"></table></div>
@@ -362,6 +363,7 @@
 
 <div id="toast" role="status" aria-live="polite"></div>
 
+<script src="xlsx.js"></script>
 <script>
 "use strict";
 const IRISH = "21000220103", US = "900000000000509007";
@@ -634,27 +636,54 @@ document.getElementById('statusSeg').addEventListener('click', e => {
 
 function q(s) { return `"${(s == null ? '' : String(s)).replace(/"/g, '""')}"`; }
 
-document.getElementById('dl').addEventListener('click', () => {
-  if (!rows.length) return;
-  let header = ['conceptId'];
-  for (const m of lastModes) header.push(MODES[m].short, MODES[m].short + '_descId');
+// Build the export table shared by CSV and Excel. Numeric columns (conceptId and
+// every description-ID column) are tracked so Excel can format them as Number.
+function exportMatrix() {
+  const header = ['conceptId'];
+  const numCols = new Set([0]);
+  let col = 0;
+  for (const m of lastModes) {
+    header.push(MODES[m].short); col++;                 // term column (text)
+    header.push(MODES[m].short + '_descId'); col++;     // desc-ID column (number)
+    numCols.add(col);
+  }
   header.push('status');
-  let csv = '﻿' + header.join(',') + '\n';
-  for (const r of rows) {
+  const matrix = rows.map(r => {
     const st = rowStatus(r);
     const cols = [r.id];
     for (const m of lastModes) {
       const c = r.cells[m] || { term: '', descId: '' };
-      cols.push(q(c.term), c.descId);
+      cols.push(c.term, c.descId);
     }
-    cols.push(q(st.text));
-    csv += cols.join(',') + '\n';
-  }
+    cols.push(st.text);
+    return cols;
+  });
+  const fname = `extracted_${lastModes.map(m => MODES[m].short).join('_')}`;
+  return { header, matrix, numCols, fname };
+}
+
+function saveBlob(bytes, mime, name) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  a.download = `extracted_${lastModes.map(m => MODES[m].short).join('_')}.csv`;
+  a.href = URL.createObjectURL(new Blob([bytes], { type: mime }));
+  a.download = name;
   a.click();
+}
+
+document.getElementById('dl').addEventListener('click', () => {
+  if (!rows.length) return;
+  const { header, matrix, fname } = exportMatrix();
+  let csv = '﻿' + header.join(',') + '\n';
+  for (const cols of matrix) csv += cols.map(q).join(',') + '\n';
+  saveBlob(csv, 'text/csv;charset=utf-8', fname + '.csv');
   toast('CSV downloaded — all ' + rows.length + ' rows.');
+});
+
+document.getElementById('xlsx').addEventListener('click', () => {
+  if (!rows.length) return;
+  const { header, matrix, numCols, fname } = exportMatrix();
+  const bytes = XLSX.build(header, matrix, numCols);
+  saveBlob(bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fname + '.xlsx');
+  toast('Excel downloaded — ID columns are Number format.');
 });
 
 document.getElementById('copyBtn').addEventListener('click', () => {
