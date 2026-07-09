@@ -4,104 +4,514 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SNOMED Description Extractor</title>
+<meta name="description" content="Extract FSNs, Irish and US preferred synonyms with description IDs for Irish National Medicinal Product concepts.">
 <style>
-  :root { color-scheme: light dark; }
-  body { font-family: "Segoe UI", system-ui, sans-serif; margin: 0; background: #f4f6f8; color: #1c2733; }
-  @media (prefers-color-scheme: dark) { body { background: #14181c; color: #e4e8ec; } .card { background: #1e242a !important; } th { background: #262d34 !important; } td, th { border-color: #333c44 !important; } textarea, input { color: inherit; } }
-  header { background: #00594c; color: #fff; padding: 14px 24px; }
-  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
-  header p { margin: 2px 0 0; font-size: 12px; opacity: .85; }
-  main { max-width: 1150px; margin: 24px auto; padding: 0 16px; }
-  .card { background: #fff; border-radius: 10px; padding: 20px 22px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 18px; }
-  label.opt { margin-right: 22px; cursor: pointer; }
-  input[type=file] { margin: 8px 0; }
-  textarea { width: 100%; box-sizing: border-box; min-height: 90px; font-family: Consolas, monospace; font-size: 13px; border-radius: 6px; border: 1px solid #b8c2cc; padding: 8px; background: inherit; color: inherit; }
-  button { background: #00594c; color: #fff; border: 0; border-radius: 6px; padding: 9px 22px; font-size: 14px; cursor: pointer; }
-  button:hover { background: #007360; }
-  button.secondary { background: #4a5560; }
-  button:disabled { opacity: .5; cursor: default; }
-  table { border-collapse: collapse; width: 100%; font-size: 13px; }
-  th, td { border: 1px solid #d4dbe2; padding: 6px 9px; text-align: left; vertical-align: top; }
-  th { background: #e9eef2; position: sticky; top: 0; }
-  .ok { color: #0a7d38; } .warn { color: #b06000; } .err { color: #c22525; }
-  #summary { margin: 10px 0; font-size: 13px; }
-  .tablewrap { overflow-x: auto; max-height: 65vh; overflow-y: auto; }
-  .hint { font-size: 12px; color: #6a7580; margin-top: 4px; }
-  #status { font-size: 13px; padding: 8px 12px; border-radius: 6px; background: #eef3f1; display: inline-block; }
+  :root {
+    --page:        #f9f9f7;
+    --surface:     #fcfcfb;
+    --surface-2:   #f0efec;
+    --ink:         #0b0b0b;
+    --ink-2:       #52514e;
+    --muted:       #898781;
+    --hairline:    #e1e0d9;
+    --ring:        rgba(11,11,11,.10);
+    --brand:       #00594c;
+    --brand-hi:    #007360;
+    --brand-ink:   #ffffff;
+    --brand-wash:  rgba(0,89,76,.08);
+    --good:        #0ca30c;
+    --good-text:   #006300;
+    --warn:        #fab219;
+    --warn-text:   #7a5200;
+    --crit:        #d03b3b;
+    --crit-text:   #a02020;
+    --good-wash:   rgba(12,163,12,.10);
+    --warn-wash:   rgba(250,178,25,.14);
+    --crit-wash:   rgba(208,59,59,.10);
+    --shadow:      0 1px 3px rgba(11,11,11,.07), 0 4px 14px rgba(11,11,11,.05);
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --page:        #0d0d0d;
+    --surface:     #1a1a19;
+    --surface-2:   #232322;
+    --ink:         #ffffff;
+    --ink-2:       #c3c2b7;
+    --muted:       #898781;
+    --hairline:    #2c2c2a;
+    --ring:        rgba(255,255,255,.10);
+    --brand:       #0e7a68;
+    --brand-hi:    #12907b;
+    --brand-ink:   #ffffff;
+    --brand-wash:  rgba(18,144,123,.14);
+    --good-text:   #35c035;
+    --warn-text:   #fab219;
+    --crit-text:   #e66767;
+    --good-wash:   rgba(12,163,12,.16);
+    --warn-wash:   rgba(250,178,25,.14);
+    --crit-wash:   rgba(208,59,59,.16);
+    --shadow:      0 1px 3px rgba(0,0,0,.5);
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --page:        #0d0d0d;
+      --surface:     #1a1a19;
+      --surface-2:   #232322;
+      --ink:         #ffffff;
+      --ink-2:       #c3c2b7;
+      --muted:       #898781;
+      --hairline:    #2c2c2a;
+      --ring:        rgba(255,255,255,.10);
+      --brand:       #0e7a68;
+      --brand-hi:    #12907b;
+      --brand-ink:   #ffffff;
+      --brand-wash:  rgba(18,144,123,.14);
+      --good-text:   #35c035;
+      --warn-text:   #fab219;
+      --crit-text:   #e66767;
+      --good-wash:   rgba(12,163,12,.16);
+      --warn-wash:   rgba(250,178,25,.14);
+      --crit-wash:   rgba(208,59,59,.16);
+      --shadow:      0 1px 3px rgba(0,0,0,.5);
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page); color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- header ---------- */
+  .topbar {
+    background: var(--brand); color: var(--brand-ink);
+    padding: 0 max(24px, calc((100% - 1160px) / 2));
+    display: flex; align-items: center; gap: 14px; height: 62px;
+  }
+  .logo {
+    width: 34px; height: 34px; border-radius: 9px; flex: none;
+    background: rgba(255,255,255,.16);
+    display: grid; place-items: center; font-weight: 700; font-size: 15px;
+    letter-spacing: .5px;
+  }
+  .topbar h1 { font-size: 17px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
+  .topbar .sub { font-size: 12px; opacity: .82; margin-top: 1px; }
+  .topbar .spacer { flex: 1; }
+  .pill {
+    font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 99px;
+    background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22);
+    white-space: nowrap;
+  }
+  .iconbtn {
+    background: rgba(255,255,255,.12); color: inherit; border: 1px solid rgba(255,255,255,.22);
+    width: 34px; height: 34px; border-radius: 9px; cursor: pointer; font-size: 16px;
+    display: grid; place-items: center;
+  }
+  .iconbtn:hover { background: rgba(255,255,255,.22); }
+
+  main { max-width: 1160px; margin: 26px auto 60px; padding: 0 24px; }
+
+  /* ---------- cards & steps ---------- */
+  .card {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 22px 24px; margin-bottom: 18px;
+  }
+  .step { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+  .stepnum {
+    width: 24px; height: 24px; border-radius: 99px; flex: none;
+    background: var(--brand); color: var(--brand-ink);
+    display: grid; place-items: center; font-size: 12.5px; font-weight: 700;
+  }
+  .step h2 { font-size: 15.5px; font-weight: 650; margin: 0; }
+  .hint { color: var(--muted); font-size: 12.5px; }
+
+  /* ---------- input zone ---------- */
+  .inputgrid { display: grid; grid-template-columns: 300px 1fr; gap: 16px; }
+  @media (max-width: 760px) { .inputgrid { grid-template-columns: 1fr; } }
+  .dropzone {
+    border: 1.5px dashed var(--hairline); border-radius: 12px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; padding: 22px 14px; text-align: center; cursor: pointer;
+    color: var(--ink-2); transition: border-color .15s, background .15s;
+    min-height: 128px;
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--brand-hi); background: var(--brand-wash); }
+  .dropzone .big { font-size: 26px; line-height: 1; }
+  .dropzone b { color: var(--ink); font-size: 13.5px; }
+  .dropzone .hint { pointer-events: none; }
+  .dz-file {
+    display: none; margin-top: 4px; font-size: 12.5px; font-weight: 600;
+    background: var(--brand-wash); color: var(--ink); padding: 3px 10px; border-radius: 99px;
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  textarea {
+    width: 100%; min-height: 128px; resize: vertical;
+    font: 13px/1.6 ui-monospace, Consolas, monospace;
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--hairline); border-radius: 12px; padding: 10px 12px;
+  }
+  textarea:focus, .search input:focus { outline: 2px solid var(--brand-hi); outline-offset: -1px; border-color: transparent; }
+  .idcount { margin-top: 6px; font-size: 12.5px; color: var(--ink-2); min-height: 18px; }
+  .idcount b { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .linklike { background: none; border: none; color: var(--brand-hi); font-size: 12.5px; cursor: pointer; padding: 0; text-decoration: underline; }
+
+  /* ---------- chips ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    border: 1.5px solid var(--hairline); background: var(--surface);
+    padding: 8px 14px; border-radius: 99px; font-size: 13.5px; font-weight: 550;
+    user-select: none; transition: all .12s;
+  }
+  .chip input { display: none; }
+  .chip .box {
+    width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--muted);
+    display: grid; place-items: center; font-size: 11px; color: transparent; flex: none;
+    transition: all .12s;
+  }
+  .chip.on { border-color: var(--brand-hi); background: var(--brand-wash); }
+  .chip.on .box { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+  /* ---------- buttons ---------- */
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 18px; }
+  button.primary, button.ghost {
+    font: 600 14px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+    border-radius: 10px; padding: 11px 22px; cursor: pointer; transition: all .12s;
+  }
+  button.primary { background: var(--brand); color: var(--brand-ink); border: 1px solid transparent; }
+  button.primary:hover { background: var(--brand-hi); }
+  button.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--hairline); }
+  button.ghost:hover { border-color: var(--muted); }
+  button:disabled { opacity: .45; cursor: default; pointer-events: none; }
+  kbd {
+    font: 11px ui-monospace, Consolas, monospace; color: var(--muted);
+    border: 1px solid var(--hairline); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px;
+  }
+
+  /* ---------- loading ---------- */
+  #loadCard { display: flex; align-items: center; gap: 14px; }
+  .spinner {
+    width: 22px; height: 22px; flex: none; border-radius: 50%;
+    border: 3px solid var(--hairline); border-top-color: var(--brand-hi);
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(1turn); } }
+
+  /* ---------- stat tiles ---------- */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 12px;
+    padding: 14px 16px; box-shadow: var(--shadow);
+  }
+  .tile .k { font-size: 12px; font-weight: 600; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+  .tile .v { font-size: 26px; font-weight: 700; margin-top: 2px; letter-spacing: -.02em; }
+  .dot { width: 8px; height: 8px; border-radius: 99px; flex: none; }
+
+  /* ---------- results toolbar ---------- */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
+  .search { position: relative; flex: 1; min-width: 200px; max-width: 340px; }
+  .search input {
+    width: 100%; padding: 9px 12px 9px 34px; border-radius: 10px;
+    border: 1px solid var(--hairline); background: var(--surface); color: var(--ink);
+    font-size: 13.5px;
+  }
+  .search::before { content: "⌕"; position: absolute; left: 11px; top: 50%; transform: translateY(-54%); color: var(--muted); font-size: 17px; }
+  .seg { display: inline-flex; border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; }
+  .seg button {
+    background: var(--surface); color: var(--ink-2); border: none; cursor: pointer;
+    font: 550 12.5px system-ui, sans-serif; padding: 9px 13px;
+  }
+  .seg button + button { border-left: 1px solid var(--hairline); }
+  .seg button.on { background: var(--brand-wash); color: var(--ink); font-weight: 650; }
+  .toolbar .right { margin-left: auto; display: flex; gap: 8px; }
+
+  /* ---------- table ---------- */
+  .tablewrap { overflow: auto; max-height: 62vh; border: 1px solid var(--hairline); border-radius: 12px; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13.5px; }
+  th {
+    position: sticky; top: 0; z-index: 1; text-align: left;
+    background: var(--surface-2); color: var(--ink-2);
+    font-size: 12px; font-weight: 650; letter-spacing: .02em;
+    padding: 9px 12px; border-bottom: 1px solid var(--hairline); white-space: nowrap;
+  }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--ink); }
+  th .arrow { font-size: 10px; margin-left: 4px; }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-2) 45%, transparent); }
+  tbody tr:hover { background: var(--brand-wash); }
+  td.num, td.sctid { font-variant-numeric: tabular-nums; }
+  td.sctid { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; white-space: nowrap; }
+  td.num { color: var(--muted); }
+  .copyid { cursor: pointer; border-bottom: 1px dotted var(--muted); }
+  .copyid:hover { color: var(--brand-hi); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 99px;
+  }
+  .badge.ok   { background: var(--good-wash); color: var(--good-text); }
+  .badge.warn { background: var(--warn-wash); color: var(--warn-text); }
+  .badge.err  { background: var(--crit-wash); color: var(--crit-text); }
+
+  .empty { text-align: center; color: var(--muted); padding: 40px 10px; font-size: 14px; }
+
+  footer { max-width: 1160px; margin: 0 auto; padding: 0 24px 40px; color: var(--muted); font-size: 12.5px; }
+  footer a { color: var(--brand-hi); }
+
+  /* ---------- toast ---------- */
+  #toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(80px);
+    background: var(--ink); color: var(--page); font-size: 13.5px; font-weight: 550;
+    padding: 11px 20px; border-radius: 10px; box-shadow: var(--shadow);
+    opacity: 0; transition: all .25s; pointer-events: none; z-index: 50; max-width: 90vw;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
-<header>
-  <h1>SNOMED Description Extractor</h1>
-  <p>Irish National Medicinal Product concepts &mdash; SNOMED CT Irish Edition (module 1601000220105)</p>
-</header>
+
+<div class="topbar">
+  <div class="logo">Rx</div>
+  <div>
+    <h1>SNOMED Description Extractor</h1>
+    <div class="sub">Irish National Medicinal Product concepts</div>
+  </div>
+  <div class="spacer"></div>
+  <span class="pill" id="editionPill">loading…</span>
+  <button class="iconbtn" id="themeBtn" title="Toggle light / dark theme" aria-label="Toggle theme">◐</button>
+</div>
+
 <main>
-  <div class="card">
-    <span id="status">Loading concept data&hellip;</span>
+  <div class="card" id="loadCard">
+    <div class="spinner" id="loadSpin"></div>
+    <div>
+      <b id="loadTitle">Loading concept data…</b>
+      <div class="hint" id="loadDetail">fetching data.json</div>
+    </div>
   </div>
-  <div class="card" id="controls" style="display:none">
-    <p style="margin-top:0"><b>1. Concept IDs</b> &mdash; upload a CSV (concept ID in the first column) or paste IDs below.</p>
-    <input type="file" id="file" accept=".csv,.txt,.tsv">
-    <textarea id="ids" placeholder="e.g.
-216131000220109
-373321000220101"></textarea>
-    <div class="hint">Header rows and extra columns are ignored automatically.</div>
-    <p><b>2. What do you want to extract?</b> <span class="hint">(select one or more)</span></p>
-    <label class="opt"><input type="checkbox" name="mode" value="fsn" checked> FSN</label>
-    <label class="opt"><input type="checkbox" name="mode" value="irishPt"> Irish preferred synonym</label>
-    <label class="opt"><input type="checkbox" name="mode" value="usPt"> US English preferred synonym</label>
-    <p>
-      <button id="go">Extract</button>
-      <button id="dl" class="secondary" disabled>Download CSV</button>
-    </p>
-  </div>
-  <div class="card" id="resultsCard" style="display:none">
-    <div id="summary"></div>
-    <div class="tablewrap"><table id="tbl"></table></div>
+
+  <div id="app" style="display:none">
+    <div class="card">
+      <div class="step"><div class="stepnum">1</div><h2>Provide concept IDs</h2></div>
+      <div class="inputgrid">
+        <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload a CSV file">
+          <div class="big">⇪</div>
+          <b>Drop a CSV here</b>
+          <span class="hint">or click to browse — concept IDs in the first column</span>
+          <span class="dz-file" id="dzFile"></span>
+          <input type="file" id="file" accept=".csv,.txt,.tsv" hidden>
+        </div>
+        <div>
+          <textarea id="ids" placeholder="…or paste concept IDs here, e.g.&#10;216131000220109&#10;373321000220101" spellcheck="false"></textarea>
+          <div class="idcount" id="idCount">
+            <button class="linklike" id="sampleBtn">Try sample IDs</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="step"><div class="stepnum">2</div><h2>Choose descriptions to extract</h2>
+        <span class="hint">select one or more</span></div>
+      <div class="chips" id="chips">
+        <label class="chip on"><input type="checkbox" name="mode" value="fsn" checked><span class="box">✓</span>FSN</label>
+        <label class="chip"><input type="checkbox" name="mode" value="irishPt"><span class="box">✓</span>Irish preferred synonym</label>
+        <label class="chip"><input type="checkbox" name="mode" value="usPt"><span class="box">✓</span>US English preferred synonym</label>
+        <button class="linklike" id="allBtn">select all</button>
+      </div>
+      <div class="actions">
+        <button class="primary" id="go">Extract descriptions</button>
+        <span class="hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
+      </div>
+    </div>
+
+    <div id="resultsWrap" style="display:none">
+      <div class="tiles" id="tiles"></div>
+      <div class="card">
+        <div class="toolbar">
+          <div class="search"><input id="q" type="search" placeholder="Filter results — ID or term…" aria-label="Filter results"></div>
+          <div class="seg" id="statusSeg">
+            <button data-f="all" class="on">All</button>
+            <button data-f="ok">✓ OK</button>
+            <button data-f="warn">⚠ Issues</button>
+            <button data-f="err">✕ Not found</button>
+          </div>
+          <div class="right">
+            <button class="ghost" id="copyBtn">Copy view</button>
+            <button class="ghost" id="dl">Download CSV</button>
+          </div>
+        </div>
+        <div class="tablewrap"><table id="tbl"></table></div>
+        <div class="empty" id="emptyMsg" style="display:none">No rows match the current filter.</div>
+      </div>
+    </div>
   </div>
 </main>
+
+<footer>
+  Data: SNOMED CT Irish Edition <span id="footVer"></span>, module 1601000220105 (Irish National Medicinal Product) —
+  processed entirely in your browser; nothing you upload leaves this page.
+  · <a href="https://github.com/snbyrnes/snomed-fsn-extractor">Source &amp; dataset</a>
+</footer>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
 <script>
+"use strict";
 const IRISH = "21000220103", US = "900000000000509007";
 const MODES = {
-  fsn:     { label: 'FSN',                     short: 'fsn' },
-  irishPt: { label: 'Irish preferred synonym', short: 'irish_pt' },
-  usPt:    { label: 'US preferred synonym',    short: 'us_pt' }
+  fsn:     { label: 'FSN',                        short: 'fsn' },
+  irishPt: { label: 'Irish preferred synonym',    short: 'irish_pt' },
+  usPt:    { label: 'US preferred synonym',       short: 'us_pt' }
 };
-let CONCEPTS = {};      // conceptId -> { a, e, d, ld }
-let rows = [];
-let lastModes = [];
+const SAMPLE = ["216131000220109","373321000220101","316841000220104","990871000220102"];
 
-// ---- load the static dataset once ----
+let CONCEPTS = {};
+let rows = [];            // { id, cells:{mode:{term,descId,note}}, found, active }
+let lastModes = [];
+let filterText = "", filterStatus = "all";
+let sortKey = null, sortDir = 1;   // sortKey: 'id' | 'status' | null (input order)
+
+/* ---------- URL params (?theme=light|dark, ?demo=1) ---------- */
+const params = new URLSearchParams(location.search);
+
+/* ---------- theme ---------- */
+const themeBtn = document.getElementById('themeBtn');
+const savedTheme = params.get('theme') || localStorage.getItem('theme');
+if (savedTheme) document.documentElement.dataset.theme = savedTheme;
+themeBtn.addEventListener('click', () => {
+  const cur = document.documentElement.dataset.theme
+    || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('theme', next);
+});
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+/* ---------- data load with progress ---------- */
 (async function init() {
-  const st = document.getElementById('status');
+  const detail = document.getElementById('loadDetail');
   try {
     const resp = await fetch('data.json');
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const data = await resp.json();
+    let text;
+    if (resp.body && resp.body.getReader) {
+      const reader = resp.body.getReader();
+      const chunks = []; let got = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value); got += value.length;
+        detail.textContent = (got / 1048576).toFixed(1) + ' MB received…';
+      }
+      const buf = new Uint8Array(got);
+      let off = 0; for (const c of chunks) { buf.set(c, off); off += c.length; }
+      text = new TextDecoder().decode(buf);
+    } else {
+      text = await resp.text();
+    }
+    detail.textContent = 'parsing…';
+    await new Promise(r => setTimeout(r));           // let the UI paint
+    const data = JSON.parse(text);
     CONCEPTS = data.concepts;
-    st.textContent = `Ready — ${Object.keys(CONCEPTS).length.toLocaleString()} concepts loaded (SNOMED CT Irish Edition ${data.version}, module ${data.module}).`;
-    document.getElementById('controls').style.display = '';
+    const n = Object.keys(CONCEPTS).length.toLocaleString();
+    document.getElementById('editionPill').textContent = 'Edition ' + data.version + ' · ' + n + ' concepts';
+    document.getElementById('footVer').textContent = data.version;
+    document.getElementById('loadCard').style.display = 'none';
+    document.getElementById('app').style.display = '';
+    if (params.get('demo')) {
+      idsEl.value = SAMPLE.join('\n');
+      updateCount();
+      document.querySelectorAll('.chip input').forEach(c => { c.checked = true; c.closest('.chip').classList.add('on'); });
+      extract();
+    }
   } catch (err) {
-    st.className = 'err';
-    st.textContent = 'Could not load data.json: ' + err;
+    document.getElementById('loadSpin').style.display = 'none';
+    document.getElementById('loadTitle').textContent = 'Could not load concept data';
+    detail.textContent = String(err);
   }
 })();
 
-document.getElementById('file').addEventListener('change', e => {
-  const f = e.target.files[0];
+/* ---------- id input ---------- */
+const idsEl = document.getElementById('ids');
+const dz = document.getElementById('dropzone');
+const fileEl = document.getElementById('file');
+
+function parseIds(text) {
+  const out = [], seen = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    for (const tok of line.split(/[\t,;]/)) {
+      const id = tok.replace(/[^0-9]/g, '');
+      if (id.length >= 6 && id.length <= 18 && !seen.has(id)) { seen.add(id); out.push(id); }
+      break;                                        // first column only per line
+    }
+  }
+  return out;
+}
+function updateCount() {
+  const n = parseIds(idsEl.value).length;
+  const el = document.getElementById('idCount');
+  el.innerHTML = n
+    ? '<b>' + n.toLocaleString() + '</b> concept ID' + (n === 1 ? '' : 's') + ' detected'
+    : '<button class="linklike" id="sampleBtn">Try sample IDs</button>';
+  const s = document.getElementById('sampleBtn');
+  if (s) s.addEventListener('click', useSample);
+}
+function useSample() {
+  idsEl.value = SAMPLE.join('\n');
+  updateCount();
+  toast('Sample IDs inserted — includes one unpublished concept to show "not found".');
+}
+document.getElementById('sampleBtn').addEventListener('click', useSample);
+idsEl.addEventListener('input', updateCount);
+
+function readFile(f) {
   if (!f) return;
   const r = new FileReader();
   r.onload = () => {
-    const ids = [];
-    for (const line of r.result.split(/\r?\n/)) {
-      const cell = line.split(/[\t,;]/)[0].replace(/[^0-9]/g, '');
-      if (cell.length >= 6 && cell.length <= 18) ids.push(cell);
-    }
-    document.getElementById('ids').value = ids.join('\n');
+    idsEl.value = parseIds(r.result).join('\n');
+    updateCount();
+    const chip = document.getElementById('dzFile');
+    chip.style.display = 'inline-block';
+    chip.textContent = f.name;
+    toast('Loaded ' + parseIds(r.result).length + ' IDs from ' + f.name);
   };
   r.readAsText(f);
+}
+dz.addEventListener('click', () => fileEl.click());
+dz.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileEl.click(); } });
+fileEl.addEventListener('change', e => readFile(e.target.files[0]));
+['dragenter','dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('drag'); }));
+dz.addEventListener('drop', e => readFile(e.dataTransfer.files[0]));
+
+/* ---------- chips ---------- */
+document.querySelectorAll('.chip input').forEach(cb => {
+  cb.addEventListener('change', () => cb.closest('.chip').classList.toggle('on', cb.checked));
+});
+document.getElementById('allBtn').addEventListener('click', () => {
+  const cbs = [...document.querySelectorAll('.chip input')];
+  const allOn = cbs.every(c => c.checked);
+  cbs.forEach(c => { c.checked = !allOn; c.closest('.chip').classList.toggle('on', !allOn); });
+  document.getElementById('allBtn').textContent = allOn ? 'select all' : 'clear all';
 });
 
+/* ---------- extraction ---------- */
 function pick(ld, mode) {
   if (!ld) return { term: '', descId: '', note: 'no description data' };
   const ie = ld[IRISH], us = ld[US];
@@ -117,68 +527,122 @@ function pick(ld, mode) {
   return d ? { term: d.text, descId: d.id, note: '' } : { term: '', descId: '', note: 'no US preferred term' };
 }
 
-document.getElementById('go').addEventListener('click', () => {
-  const idsText = document.getElementById('ids').value.trim();
-  if (!idsText) { alert('Provide some concept IDs first.'); return; }
-  const modes = [...document.querySelectorAll('input[name=mode]:checked')].map(c => c.value);
-  if (modes.length === 0) { alert('Select at least one description type to extract.'); return; }
-  rows = [];
-  const seen = new Set();
-  for (const line of idsText.split(/[\s,;]+/)) {
-    const id = line.replace(/[^0-9]/g, '');
-    if (id.length < 6 || seen.has(id)) continue;
-    seen.add(id);
+function extract() {
+  const ids = parseIds(idsEl.value);
+  if (!ids.length) { toast('Provide some concept IDs first.'); idsEl.focus(); return; }
+  const modes = [...document.querySelectorAll('.chip input:checked')].map(c => c.value);
+  if (!modes.length) { toast('Select at least one description type.'); return; }
+  rows = ids.map(id => {
     const hit = CONCEPTS[id];
-    if (!hit) { rows.push({ id, cells: {}, found: false, active: '' }); continue; }
+    if (!hit) return { id, cells: {}, found: false, active: '' };
     const cells = {};
     for (const m of modes) cells[m] = pick(hit.ld, m);
-    rows.push({ id, cells, found: true, active: hit.a });
-  }
+    return { id, cells, found: true, active: hit.a };
+  });
   lastModes = modes;
+  filterText = ''; document.getElementById('q').value = '';
+  filterStatus = 'all';
+  document.querySelectorAll('#statusSeg button').forEach(b => b.classList.toggle('on', b.dataset.f === 'all'));
+  sortKey = null;
   render();
-});
+  document.getElementById('resultsWrap').style.display = '';
+  document.getElementById('resultsWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+document.getElementById('go').addEventListener('click', extract);
+document.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') extract(); });
 
+/* ---------- status ---------- */
 function rowStatus(r) {
-  if (!r.found) return { text: 'concept not found', cls: 'err' };
+  if (!r.found) return { cls: 'err', icon: '✕', text: 'concept not found' };
   const missing = lastModes.filter(m => r.cells[m].note).map(m => r.cells[m].note);
-  if (missing.length) return { text: missing.join('; '), cls: 'warn' };
-  return { text: r.active === 'T' ? 'OK' : 'OK (inactive concept)', cls: 'ok' };
+  if (missing.length) return { cls: 'warn', icon: '⚠', text: missing.join('; ') };
+  if (r.active !== 'T') return { cls: 'warn', icon: '⚠', text: 'OK — inactive concept' };
+  return { cls: 'ok', icon: '✓', text: 'OK' };
+}
+
+/* ---------- view (filter + sort) ---------- */
+function currentView() {
+  let v = rows.map((r, i) => ({ r, i, st: rowStatus(r) }));
+  if (filterStatus !== 'all') v = v.filter(x => x.st.cls === filterStatus);
+  if (filterText) {
+    const f = filterText.toLowerCase();
+    v = v.filter(x => x.r.id.includes(f)
+      || lastModes.some(m => {
+           const c = x.r.cells[m];
+           return c && (c.term.toLowerCase().includes(f) || c.descId.includes(f));
+         }));
+  }
+  if (sortKey === 'id') v.sort((a, b) => sortDir * a.r.id.localeCompare(b.r.id, undefined, { numeric: true }));
+  else if (sortKey === 'status') {
+    const rank = { ok: 0, warn: 1, err: 2 };
+    v.sort((a, b) => sortDir * (rank[a.st.cls] - rank[b.st.cls]));
+  }
+  return v;
 }
 
 function render() {
-  const tbl = document.getElementById('tbl');
-  let head = `<tr><th>#</th><th>Concept ID</th>`;
-  for (const m of lastModes) head += `<th>${MODES[m].label}</th><th>${MODES[m].label} &mdash; Desc ID</th>`;
-  head += `<th>Status</th></tr>`;
-  let html = head;
-  rows.forEach((r, i) => {
-    const st = rowStatus(r);
-    html += `<tr><td>${i + 1}</td><td>${r.id}</td>`;
+  // tiles
+  const counts = { ok: 0, warn: 0, err: 0 };
+  rows.forEach(r => counts[rowStatus(r).cls]++);
+  document.getElementById('tiles').innerHTML = `
+    <div class="tile"><div class="k">Processed</div><div class="v">${rows.length.toLocaleString()}</div></div>
+    <div class="tile"><div class="k"><span class="dot" style="background:var(--good)"></span>✓ Fully extracted</div><div class="v">${counts.ok.toLocaleString()}</div></div>
+    <div class="tile"><div class="k"><span class="dot" style="background:var(--warn)"></span>⚠ With issues</div><div class="v">${counts.warn.toLocaleString()}</div></div>
+    <div class="tile"><div class="k"><span class="dot" style="background:var(--crit)"></span>✕ Not found</div><div class="v">${counts.err.toLocaleString()}</div></div>`;
+
+  // table
+  const v = currentView();
+  const arrow = k => sortKey === k ? `<span class="arrow">${sortDir === 1 ? '▲' : '▼'}</span>` : '';
+  let html = `<thead><tr><th style="width:44px">#</th>
+    <th class="sortable" data-k="id">Concept ID${arrow('id')}</th>`;
+  for (const m of lastModes) html += `<th>${MODES[m].label}</th><th>Desc ID</th>`;
+  html += `<th class="sortable" data-k="status">Status${arrow('status')}</th></tr></thead><tbody>`;
+  for (const x of v) {
+    html += `<tr><td class="num">${x.i + 1}</td>
+      <td class="sctid"><span class="copyid" data-copy="${x.r.id}" title="Click to copy">${x.r.id}</span></td>`;
     for (const m of lastModes) {
-      const c = r.cells[m] || { term: '', descId: '' };
-      html += `<td>${escapeHtml(c.term)}</td><td>${c.descId}</td>`;
+      const c = x.r.cells[m] || { term: '', descId: '' };
+      html += `<td>${esc(c.term)}</td>
+        <td class="sctid">${c.descId ? `<span class="copyid" data-copy="${c.descId}" title="Click to copy">${c.descId}</span>` : ''}</td>`;
     }
-    html += `<td class="${st.cls}">${st.text}</td></tr>`;
-  });
-  tbl.innerHTML = html;
-  const ok = rows.filter(r => rowStatus(r).cls === 'ok').length;
-  document.getElementById('summary').innerHTML =
-    `<b>${rows.length}</b> concepts processed &mdash; <span class="ok">${ok} fully extracted</span>, ` +
-    `<span class="warn">${rows.length - ok} with issues</span>`;
-  document.getElementById('resultsCard').style.display = '';
-  document.getElementById('dl').disabled = rows.length === 0;
+    html += `<td><span class="badge ${x.st.cls}">${x.st.icon} ${esc(x.st.text)}</span></td></tr>`;
+  }
+  html += '</tbody>';
+  document.getElementById('tbl').innerHTML = html;
+  document.getElementById('emptyMsg').style.display = v.length ? 'none' : '';
+  document.getElementById('tbl').style.display = v.length ? '' : 'none';
+
+  document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.k;
+    if (sortKey === k) { if (sortDir === 1) sortDir = -1; else { sortKey = null; sortDir = 1; } }
+    else { sortKey = k; sortDir = 1; }
+    render();
+  }));
+  document.querySelectorAll('.copyid').forEach(el => el.addEventListener('click', () => {
+    navigator.clipboard.writeText(el.dataset.copy).then(() => toast('Copied ' + el.dataset.copy));
+  }));
 }
+
+/* ---------- toolbar ---------- */
+document.getElementById('q').addEventListener('input', e => { filterText = e.target.value.trim(); render(); });
+document.getElementById('statusSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  filterStatus = b.dataset.f;
+  document.querySelectorAll('#statusSeg button').forEach(x => x.classList.toggle('on', x === b));
+  render();
+});
 
 function q(s) { return `"${(s == null ? '' : String(s)).replace(/"/g, '""')}"`; }
 
 document.getElementById('dl').addEventListener('click', () => {
+  if (!rows.length) return;
   let header = ['conceptId'];
   for (const m of lastModes) header.push(MODES[m].short, MODES[m].short + '_descId');
   header.push('status');
   let csv = '﻿' + header.join(',') + '\n';
   for (const r of rows) {
     const st = rowStatus(r);
-    let cols = [r.id];
+    const cols = [r.id];
     for (const m of lastModes) {
       const c = r.cells[m] || { term: '', descId: '' };
       cols.push(q(c.term), c.descId);
@@ -190,9 +654,29 @@ document.getElementById('dl').addEventListener('click', () => {
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   a.download = `extracted_${lastModes.map(m => MODES[m].short).join('_')}.csv`;
   a.click();
+  toast('CSV downloaded — all ' + rows.length + ' rows.');
 });
 
-function escapeHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+document.getElementById('copyBtn').addEventListener('click', () => {
+  const v = currentView();
+  if (!v.length) { toast('Nothing to copy.'); return; }
+  let header = ['conceptId'];
+  for (const m of lastModes) header.push(MODES[m].short, MODES[m].short + '_descId');
+  header.push('status');
+  let tsv = header.join('\t') + '\n';
+  for (const x of v) {
+    const cols = [x.r.id];
+    for (const m of lastModes) {
+      const c = x.r.cells[m] || { term: '', descId: '' };
+      cols.push(c.term, c.descId);
+    }
+    cols.push(x.st.text);
+    tsv += cols.join('\t') + '\n';
+  }
+  navigator.clipboard.writeText(tsv).then(() => toast('Copied ' + v.length + ' rows — paste straight into Excel.'));
+});
+
+function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 </script>
 </body>
 </html>
