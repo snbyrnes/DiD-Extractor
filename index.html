@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SNOMED Description Extractor</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; margin: 0; background: #f4f6f8; color: #1c2733; }
+  @media (prefers-color-scheme: dark) { body { background: #14181c; color: #e4e8ec; } .card { background: #1e242a !important; } th { background: #262d34 !important; } td, th { border-color: #333c44 !important; } textarea, input { color: inherit; } }
+  header { background: #00594c; color: #fff; padding: 14px 24px; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header p { margin: 2px 0 0; font-size: 12px; opacity: .85; }
+  main { max-width: 1150px; margin: 24px auto; padding: 0 16px; }
+  .card { background: #fff; border-radius: 10px; padding: 20px 22px; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 18px; }
+  label.opt { margin-right: 22px; cursor: pointer; }
+  input[type=file] { margin: 8px 0; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 90px; font-family: Consolas, monospace; font-size: 13px; border-radius: 6px; border: 1px solid #b8c2cc; padding: 8px; background: inherit; color: inherit; }
+  button { background: #00594c; color: #fff; border: 0; border-radius: 6px; padding: 9px 22px; font-size: 14px; cursor: pointer; }
+  button:hover { background: #007360; }
+  button.secondary { background: #4a5560; }
+  button:disabled { opacity: .5; cursor: default; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border: 1px solid #d4dbe2; padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #e9eef2; position: sticky; top: 0; }
+  .ok { color: #0a7d38; } .warn { color: #b06000; } .err { color: #c22525; }
+  #summary { margin: 10px 0; font-size: 13px; }
+  .tablewrap { overflow-x: auto; max-height: 65vh; overflow-y: auto; }
+  .hint { font-size: 12px; color: #6a7580; margin-top: 4px; }
+  #status { font-size: 13px; padding: 8px 12px; border-radius: 6px; background: #eef3f1; display: inline-block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SNOMED Description Extractor</h1>
+  <p>Irish National Medicinal Product concepts &mdash; SNOMED CT Irish Edition (module 1601000220105)</p>
+</header>
+<main>
+  <div class="card">
+    <span id="status">Loading concept data&hellip;</span>
+  </div>
+  <div class="card" id="controls" style="display:none">
+    <p style="margin-top:0"><b>1. Concept IDs</b> &mdash; upload a CSV (concept ID in the first column) or paste IDs below.</p>
+    <input type="file" id="file" accept=".csv,.txt,.tsv">
+    <textarea id="ids" placeholder="e.g.
+216131000220109
+373321000220101"></textarea>
+    <div class="hint">Header rows and extra columns are ignored automatically.</div>
+    <p><b>2. What do you want to extract?</b> <span class="hint">(select one or more)</span></p>
+    <label class="opt"><input type="checkbox" name="mode" value="fsn" checked> FSN</label>
+    <label class="opt"><input type="checkbox" name="mode" value="irishPt"> Irish preferred synonym</label>
+    <label class="opt"><input type="checkbox" name="mode" value="usPt"> US English preferred synonym</label>
+    <p>
+      <button id="go">Extract</button>
+      <button id="dl" class="secondary" disabled>Download CSV</button>
+    </p>
+  </div>
+  <div class="card" id="resultsCard" style="display:none">
+    <div id="summary"></div>
+    <div class="tablewrap"><table id="tbl"></table></div>
+  </div>
+</main>
+<script>
+const IRISH = "21000220103", US = "900000000000509007";
+const MODES = {
+  fsn:     { label: 'FSN',                     short: 'fsn' },
+  irishPt: { label: 'Irish preferred synonym', short: 'irish_pt' },
+  usPt:    { label: 'US preferred synonym',    short: 'us_pt' }
+};
+let CONCEPTS = {};      // conceptId -> { a, e, d, ld }
+let rows = [];
+let lastModes = [];
+
+// ---- load the static dataset once ----
+(async function init() {
+  const st = document.getElementById('status');
+  try {
+    const resp = await fetch('data.json');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    CONCEPTS = data.concepts;
+    st.textContent = `Ready — ${Object.keys(CONCEPTS).length.toLocaleString()} concepts loaded (SNOMED CT Irish Edition ${data.version}, module ${data.module}).`;
+    document.getElementById('controls').style.display = '';
+  } catch (err) {
+    st.className = 'err';
+    st.textContent = 'Could not load data.json: ' + err;
+  }
+})();
+
+document.getElementById('file').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    const ids = [];
+    for (const line of r.result.split(/\r?\n/)) {
+      const cell = line.split(/[\t,;]/)[0].replace(/[^0-9]/g, '');
+      if (cell.length >= 6 && cell.length <= 18) ids.push(cell);
+    }
+    document.getElementById('ids').value = ids.join('\n');
+  };
+  r.readAsText(f);
+});
+
+function pick(ld, mode) {
+  if (!ld) return { term: '', descId: '', note: 'no description data' };
+  const ie = ld[IRISH], us = ld[US];
+  if (mode === 'fsn') {
+    const d = (ie && ie.fsn) || (us && us.fsn) || null;
+    return d ? { term: d.text, descId: d.id, note: '' } : { term: '', descId: '', note: 'no FSN' };
+  }
+  if (mode === 'irishPt') {
+    const d = ie && ie.preferredTerm;
+    return d ? { term: d.text, descId: d.id, note: '' } : { term: '', descId: '', note: 'no Irish preferred term' };
+  }
+  const d = us && us.preferredTerm;
+  return d ? { term: d.text, descId: d.id, note: '' } : { term: '', descId: '', note: 'no US preferred term' };
+}
+
+document.getElementById('go').addEventListener('click', () => {
+  const idsText = document.getElementById('ids').value.trim();
+  if (!idsText) { alert('Provide some concept IDs first.'); return; }
+  const modes = [...document.querySelectorAll('input[name=mode]:checked')].map(c => c.value);
+  if (modes.length === 0) { alert('Select at least one description type to extract.'); return; }
+  rows = [];
+  const seen = new Set();
+  for (const line of idsText.split(/[\s,;]+/)) {
+    const id = line.replace(/[^0-9]/g, '');
+    if (id.length < 6 || seen.has(id)) continue;
+    seen.add(id);
+    const hit = CONCEPTS[id];
+    if (!hit) { rows.push({ id, cells: {}, found: false, active: '' }); continue; }
+    const cells = {};
+    for (const m of modes) cells[m] = pick(hit.ld, m);
+    rows.push({ id, cells, found: true, active: hit.a });
+  }
+  lastModes = modes;
+  render();
+});
+
+function rowStatus(r) {
+  if (!r.found) return { text: 'concept not found', cls: 'err' };
+  const missing = lastModes.filter(m => r.cells[m].note).map(m => r.cells[m].note);
+  if (missing.length) return { text: missing.join('; '), cls: 'warn' };
+  return { text: r.active === 'T' ? 'OK' : 'OK (inactive concept)', cls: 'ok' };
+}
+
+function render() {
+  const tbl = document.getElementById('tbl');
+  let head = `<tr><th>#</th><th>Concept ID</th>`;
+  for (const m of lastModes) head += `<th>${MODES[m].label}</th><th>${MODES[m].label} &mdash; Desc ID</th>`;
+  head += `<th>Status</th></tr>`;
+  let html = head;
+  rows.forEach((r, i) => {
+    const st = rowStatus(r);
+    html += `<tr><td>${i + 1}</td><td>${r.id}</td>`;
+    for (const m of lastModes) {
+      const c = r.cells[m] || { term: '', descId: '' };
+      html += `<td>${escapeHtml(c.term)}</td><td>${c.descId}</td>`;
+    }
+    html += `<td class="${st.cls}">${st.text}</td></tr>`;
+  });
+  tbl.innerHTML = html;
+  const ok = rows.filter(r => rowStatus(r).cls === 'ok').length;
+  document.getElementById('summary').innerHTML =
+    `<b>${rows.length}</b> concepts processed &mdash; <span class="ok">${ok} fully extracted</span>, ` +
+    `<span class="warn">${rows.length - ok} with issues</span>`;
+  document.getElementById('resultsCard').style.display = '';
+  document.getElementById('dl').disabled = rows.length === 0;
+}
+
+function q(s) { return `"${(s == null ? '' : String(s)).replace(/"/g, '""')}"`; }
+
+document.getElementById('dl').addEventListener('click', () => {
+  let header = ['conceptId'];
+  for (const m of lastModes) header.push(MODES[m].short, MODES[m].short + '_descId');
+  header.push('status');
+  let csv = '﻿' + header.join(',') + '\n';
+  for (const r of rows) {
+    const st = rowStatus(r);
+    let cols = [r.id];
+    for (const m of lastModes) {
+      const c = r.cells[m] || { term: '', descId: '' };
+      cols.push(q(c.term), c.descId);
+    }
+    cols.push(q(st.text));
+    csv += cols.join(',') + '\n';
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `extracted_${lastModes.map(m => MODES[m].short).join('_')}.csv`;
+  a.click();
+});
+
+function escapeHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+</script>
+</body>
+</html>
