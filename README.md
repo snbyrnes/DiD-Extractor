@@ -1,8 +1,24 @@
 # SNOMED Description Extractor (static site)
 
 A zero-backend web app: paste or upload a list of SNOMED concept IDs and get the
-**FSN**, **Irish preferred synonym**, and/or **US English preferred synonym**
-back — each with its **description ID** — then download the result as CSV.
+**FSN**, **Irish preferred synonym**, **Irish acceptable synonyms**, and/or
+**US English preferred synonym** back — each with its **description ID** — then
+download the result as CSV, plain Excel, or a prefilled **MS translations
+template** (`ms-template.xlsx`, v2.21).
+
+## MS translations template export
+Pick one or more work-type tabs in step 3 and the export fills them from the
+extracted concepts, keeping the template's formatting, dropdowns and Reference
+sheet intact:
+
+- **Description Additions** / **Bookmark Concepts** — one row per concept
+  (not-found IDs are included with a note).
+- **Description Changes / Inactivations / Replacements** — one row per
+  description selected in step 2 (not-found IDs are skipped).
+
+The workflow columns (language reference set, acceptability, language code,
+case significance) are prefilled from configurable defaults
+(IE English `21000220103`, `PREFERRED`, `en`, blank).
 
 All lookups run in the browser against a pre-built dataset (`data.json`). There is
 no server; GitHub Pages just serves the static files.
