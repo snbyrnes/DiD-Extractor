@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SNOMED Description Extractor</title>
-<meta name="description" content="Extract FSNs, Irish and US preferred synonyms with description IDs for Irish National Medicinal Product concepts.">
+<title>DiD Extractor</title>
+<meta name="description" content="Look up terms and description IDs for a list of concept IDs, then export to CSV, Excel or a prefilled translations template.">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
 <style>
   :root {
     --page:        #f9f9f7;
@@ -92,12 +93,7 @@
     padding: 0 max(24px, calc((100% - 1160px) / 2));
     display: flex; align-items: center; gap: 14px; height: 62px;
   }
-  .logo {
-    width: 34px; height: 34px; border-radius: 9px; flex: none;
-    background: rgba(255,255,255,.16);
-    display: grid; place-items: center; font-weight: 700; font-size: 15px;
-    letter-spacing: .5px;
-  }
+  .logo { width: 34px; height: 34px; border-radius: 9px; flex: none; display: block; }
   .topbar h1 { font-size: 17px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
   .topbar .sub { font-size: 12px; opacity: .82; margin-top: 1px; }
   .topbar .spacer { flex: 1; }
@@ -287,10 +283,10 @@
 <body>
 
 <div class="topbar">
-  <div class="logo">Rx</div>
+  <img class="logo" src="logo.svg" alt="">
   <div>
-    <h1>SNOMED Description Extractor</h1>
-    <div class="sub">Irish National Medicinal Product concepts</div>
+    <h1>DiD Extractor</h1>
+    <div class="sub">Description ID &amp; term lookup</div>
   </div>
   <div class="spacer"></div>
   <span class="pill" id="editionPill">loading…</span>
@@ -408,9 +404,9 @@
 </main>
 
 <footer>
-  Data: SNOMED CT Irish Edition <span id="footVer"></span>, module 1601000220105 (Irish National Medicinal Product) —
+  Dataset version <span id="footVer"></span> —
   processed entirely in your browser; nothing you upload leaves this page.
-  · <a href="https://github.com/snbyrnes/snomed-fsn-extractor">Source &amp; dataset</a>
+  · <a href="https://github.com/snbyrnes/DiD-Extractor">Source &amp; dataset</a>
 </footer>
 
 <div id="toast" role="status" aria-live="polite"></div>
@@ -485,7 +481,7 @@ function toast(msg) {
     const data = JSON.parse(text);
     CONCEPTS = data.concepts;
     const n = Object.keys(CONCEPTS).length.toLocaleString();
-    document.getElementById('editionPill').textContent = 'Edition ' + data.version + ' · ' + n + ' concepts';
+    document.getElementById('editionPill').textContent = 'Dataset ' + data.version + ' · ' + n + ' concepts';
     document.getElementById('footVer').textContent = data.version;
     document.getElementById('loadCard').style.display = 'none';
     document.getElementById('app').style.display = '';
@@ -783,7 +779,7 @@ async function exportTemplate() {
   const lang = document.getElementById('cfgLang').value.trim();
   const cs   = document.getElementById('cfgCase').value;
   const rsCell = /^\d{1,15}$/.test(rs) ? Number(rs) : rs;
-  const NOT_FOUND = 'Concept not found in dataset (module 1601000220105)';
+  const NOT_FOUND = 'Concept not found in dataset';
 
   const fills = {};
   let skipped = 0;

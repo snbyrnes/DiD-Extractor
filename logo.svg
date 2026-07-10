@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DiD Extractor">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#007360"/>
+      <stop offset="1" stop-color="#00594c"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#g)"/>
+  <!-- i -->
+  <rect x="14" y="26" width="8" height="22" rx="4" fill="#ffffff"/>
+  <circle cx="18" cy="18.5" r="4.5" fill="#fab219"/>
+  <!-- D -->
+  <path fill="#ffffff" fill-rule="evenodd" d="M28 16h9c8.8 0 16 7.2 16 16s-7.2 16-16 16h-9Zm8 8v16h1c4.4 0 8-3.6 8-8s-3.6-8-8-8Z"/>
+</svg>
