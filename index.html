@@ -196,6 +196,35 @@
     animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(1turn); } }
+  #loadCard .grow { flex: 1; min-width: 0; }
+  .bar { height: 6px; border-radius: 99px; background: var(--hairline); overflow: hidden; margin-top: 10px; }
+  .bar > span { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--brand); transition: width .2s; }
+
+  /* ---------- local release source ---------- */
+  .srcnote {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--brand-wash); border: 1px solid var(--brand-hi);
+    border-radius: 12px; padding: 14px 16px; margin: 16px 0;
+    font-size: 13.5px; line-height: 1.55; color: var(--ink-2);
+  }
+  .srcnote b { color: var(--ink); }
+  .srcnote .big { font-size: 20px; line-height: 1.2; }
+  .srcsteps { margin: 0 0 16px 18px; padding: 0; font-size: 13.5px; line-height: 1.7; color: var(--ink-2); }
+  .srcsteps code {
+    font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace;
+    background: var(--hairline); padding: 1px 6px; border-radius: 6px; word-break: break-all;
+  }
+  .errbox {
+    display: none; margin-top: 14px; padding: 12px 14px; border-radius: 10px;
+    background: var(--crit-wash); border: 1px solid var(--crit);
+    color: var(--ink); font-size: 13px; line-height: 1.55;
+  }
+  .srcbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+  .srcbar select {
+    font: 12.5px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 5px 8px; border-radius: 8px;
+    border: 1px solid var(--hairline); background: var(--surface); color: var(--ink);
+  }
 
   /* ---------- stat tiles ---------- */
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -286,10 +315,40 @@
 <main>
   <div class="card" id="loadCard">
     <div class="spinner" id="loadSpin"></div>
-    <div>
-      <b id="loadTitle">Loading concept data…</b>
-      <div class="hint" id="loadDetail">fetching data.json</div>
+    <div class="grow">
+      <b id="loadTitle">Looking for a saved dataset…</b>
+      <div class="hint" id="loadDetail"></div>
+      <div class="bar" id="loadBar" style="display:none"><span></span></div>
     </div>
+  </div>
+
+  <div class="card" id="sourceCard" style="display:none">
+    <div class="step"><div class="stepnum">◆</div><h2>Point to your SNOMED CT release</h2>
+      <span class="hint">read on your machine — never uploaded</span></div>
+
+    <div class="srcnote">
+      <div class="big">🔒</div>
+      <div>
+        This app ships no terminology content. Choose the folder you extracted your
+        release zip into and the dataset is built <b>locally in your browser</b>.
+        Nothing is sent anywhere, and the result is cached so you only do this once.
+      </div>
+    </div>
+
+    <ol class="srcsteps">
+      <li>Extract your release zip (e.g. <code>SNOMEDCT-IE-…zip</code>) anywhere on your PC.</li>
+      <li>Click below and select the extracted folder — the one containing
+          <code>Snapshot</code>, or any folder above it.</li>
+      <li>Grant read access when the browser asks.</li>
+    </ol>
+
+    <div class="actions">
+      <button class="primary" id="pickBtn">Choose release folder…</button>
+      <span class="hint" id="pickHint"></span>
+    </div>
+    <input type="file" id="pickInput" webkitdirectory directory multiple hidden>
+
+    <div class="errbox" id="srcErr"></div>
   </div>
 
   <div id="app" style="display:none">
@@ -352,14 +411,24 @@
 </main>
 
 <footer>
-  Dataset version <span id="footVer"></span> —
-  processed entirely in your browser; nothing you upload leaves this page.
-  · <a href="https://github.com/snbyrnes/DiD-Extractor">Source &amp; dataset</a>
+  <div id="footSrc" style="display:none">
+    Built locally from release <span id="footVer"></span>
+    · module <span id="footMod"></span>
+    <span class="srcbar">
+      <select id="modSel" style="display:none" title="Rebuild using a different module"></select>
+      <button class="linklike" id="rebuildBtn">rebuild</button>
+      <button class="linklike" id="changeBtn">change folder</button>
+      <button class="linklike" id="forgetBtn">forget</button>
+    </span>
+  </div>
+  Processed entirely in your browser; nothing you select ever leaves this page.
+  · <a href="https://github.com/snbyrnes/DiD-Extractor">Source</a>
 </footer>
 
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script src="xlsx.js"></script>
+<script src="rf2.js"></script>
 <script>
 "use strict";
 const IRISH = "21000220103", US = "900000000000509007";
@@ -402,48 +471,168 @@ function toast(msg) {
   toastT = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
-/* ---------- data load with progress ---------- */
-(async function init() {
-  const detail = document.getElementById('loadDetail');
-  try {
-    const resp = await fetch('data.json');
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    let text;
-    if (resp.body && resp.body.getReader) {
-      const reader = resp.body.getReader();
-      const chunks = []; let got = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value); got += value.length;
-        detail.textContent = (got / 1048576).toFixed(1) + ' MB received…';
-      }
-      const buf = new Uint8Array(got);
-      let off = 0; for (const c of chunks) { buf.set(c, off); off += c.length; }
-      text = new TextDecoder().decode(buf);
-    } else {
-      text = await resp.text();
+/* ---------- local release as the data source ----------
+   Nothing ships with the site: the dataset is built in the browser from the
+   user's own RF2 release folder, then cached so it is a one-time step. */
+const loadCard   = document.getElementById('loadCard');
+const sourceCard = document.getElementById('sourceCard');
+const srcErr     = document.getElementById('srcErr');
+let dirHandle = null;      // remembered folder (Chrome/Edge), used for rebuilds
+let dataset = null;        // the built index currently in use
+
+function setLoad(title, detail, frac) {
+  loadCard.style.display = '';
+  document.getElementById('loadSpin').style.display = '';
+  document.getElementById('loadTitle').textContent = title;
+  document.getElementById('loadDetail').textContent = detail || '';
+  const bar = document.getElementById('loadBar');
+  if (typeof frac === 'number' && isFinite(frac)) {
+    bar.style.display = '';
+    bar.firstElementChild.style.width = Math.max(0, Math.min(1, frac)) * 100 + '%';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function showSource(message) {
+  loadCard.style.display = 'none';
+  sourceCard.style.display = '';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('editionPill').textContent = 'no dataset';
+  srcErr.style.display = message ? '' : 'none';
+  srcErr.textContent = message || '';
+  document.getElementById('pickHint').textContent = RF2.supportsPicker
+    ? 'the folder is remembered for next time'
+    : 'your browser will ask for the folder each time';
+}
+
+function activate(data) {
+  dataset = data;
+  CONCEPTS = data.concepts;
+  const n = Object.keys(CONCEPTS).length.toLocaleString();
+  document.getElementById('editionPill').textContent = 'Release ' + data.version + ' · ' + n + ' concepts';
+  document.getElementById('footVer').textContent = data.version;
+  document.getElementById('footMod').textContent = data.module;
+  document.getElementById('footSrc').style.display = '';
+
+  // offer the other modules in the release, if there are any
+  const sel = document.getElementById('modSel');
+  sel.innerHTML = '';
+  if (data.modules && data.modules.length > 1) {
+    for (const m of data.modules) {
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = 'module ' + m.id + ' (' + m.count.toLocaleString() + ')';
+      o.selected = m.id === data.module;
+      sel.appendChild(o);
     }
-    detail.textContent = 'parsing…';
-    await new Promise(r => setTimeout(r));           // let the UI paint
-    const data = JSON.parse(text);
-    CONCEPTS = data.concepts;
-    const n = Object.keys(CONCEPTS).length.toLocaleString();
-    document.getElementById('editionPill').textContent = 'Dataset ' + data.version + ' · ' + n + ' concepts';
-    document.getElementById('footVer').textContent = data.version;
-    document.getElementById('loadCard').style.display = 'none';
-    document.getElementById('app').style.display = '';
-    if (params.get('demo')) {
-      idsEl.value = SAMPLE.join('\n');
-      updateCount();
-      document.querySelectorAll('#chips input[name="mode"]').forEach(c => { c.checked = true; c.closest('.chip').classList.add('on'); });
-      extract();
+    sel.style.display = '';
+  } else {
+    sel.style.display = 'none';
+  }
+
+  loadCard.style.display = 'none';
+  sourceCard.style.display = 'none';
+  document.getElementById('app').style.display = '';
+
+  if (params.get('demo')) {
+    idsEl.value = SAMPLE.join('\n');
+    updateCount();
+    document.querySelectorAll('#chips input[name="mode"]').forEach(c => { c.checked = true; c.closest('.chip').classList.add('on'); });
+    extract();
+  }
+}
+
+async function buildFrom(source, moduleId) {
+  setLoad('Reading release…', 'this runs entirely on your machine');
+  await new Promise(r => setTimeout(r));            // let the card paint
+  try {
+    const data = await RF2.build(source, {
+      module: moduleId,
+      onProgress: (stage, detail, frac) => setLoad(stage + '…', detail, frac)
+    });
+    setLoad('Saving…', 'caching so this is a one-time step');
+    try {
+      await RF2.cache.put(data);
+    } catch (e) {
+      toast('Built, but caching failed — it will rebuild next visit.');
+    }
+    activate(data);
+    toast('Dataset built — ' + Object.keys(data.concepts).length.toLocaleString() + ' concepts.');
+  } catch (err) {
+    showSource(String(err && err.message || err));
+  }
+}
+
+// A stored handle needs permission re-confirmed after a browser restart.
+async function ensureAccess(h) {
+  if (!h || !h.queryPermission) return false;
+  if (await h.queryPermission({ mode: 'read' }) === 'granted') return true;
+  try { return await h.requestPermission({ mode: 'read' }) === 'granted'; }
+  catch (e) { return false; }
+}
+
+async function chooseFolder() {
+  if (!RF2.supportsPicker) { document.getElementById('pickInput').click(); return; }
+  let handle;
+  try {
+    handle = await showDirectoryPicker({ id: 'snomed-release', mode: 'read' });
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;   // user cancelled
+    showSource(String(err.message || err));
+    return;
+  }
+  dirHandle = handle;
+  try { await RF2.cache.putDir(handle); } catch (e) {}
+  await buildFrom(handle, dataset && dataset.module);
+}
+
+document.getElementById('pickBtn').addEventListener('click', chooseFolder);
+document.getElementById('pickInput').addEventListener('change', e => {
+  const files = e.target.files;
+  if (files && files.length) buildFrom(files, dataset && dataset.module);
+  e.target.value = '';
+});
+
+document.getElementById('changeBtn').addEventListener('click', chooseFolder);
+
+document.getElementById('rebuildBtn').addEventListener('click', async () => {
+  if (dirHandle && await ensureAccess(dirHandle)) {
+    await buildFrom(dirHandle, document.getElementById('modSel').value || (dataset && dataset.module));
+  } else {
+    toast('Pick the release folder again to rebuild.');
+    chooseFolder();
+  }
+});
+
+document.getElementById('modSel').addEventListener('change', e => {
+  document.getElementById('rebuildBtn').click();
+});
+
+document.getElementById('forgetBtn').addEventListener('click', async () => {
+  await RF2.cache.clear();
+  await RF2.cache.clearDir();
+  dirHandle = null; dataset = null; CONCEPTS = {};
+  document.getElementById('footSrc').style.display = 'none';
+  document.getElementById('editionPill').textContent = 'no dataset';
+  showSource('');
+  toast('Cached dataset cleared.');
+});
+
+(async function init() {
+  try {
+    const cached = await RF2.cache.get();
+    try { dirHandle = await RF2.cache.getDir(); } catch (e) {}
+    if (cached && cached.concepts) {
+      setLoad('Loading saved dataset…', 'release ' + cached.version);
+      await new Promise(r => setTimeout(r));
+      activate(cached);
+      return;
     }
   } catch (err) {
-    document.getElementById('loadSpin').style.display = 'none';
-    document.getElementById('loadTitle').textContent = 'Could not load concept data';
-    detail.textContent = String(err);
+    // IndexedDB unavailable (private mode, etc.) — just ask for the folder
   }
+  showSource('');
 })();
 
 /* ---------- id input ---------- */
