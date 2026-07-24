@@ -3,7 +3,7 @@
 A zero-backend web app: paste or upload a list of concept IDs and get the
 matching terms back — **FSN**, **Irish preferred synonym**, **Irish acceptable
 synonyms**, and/or **US English preferred synonym** — each with its
-**description ID (DiD)**. Download the result as CSV or Excel.
+**description ID (DiD)**. Download the result as Excel.
 
 All lookups run in the browser against a pre-built dataset (`data.json`). There
 is no server; GitHub Pages just serves the static files.

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DiD Extractor</title>
-<meta name="description" content="Look up terms and description IDs for a list of concept IDs, then export to CSV or Excel.">
+<meta name="description" content="Look up terms and description IDs for a list of concept IDs, then export to Excel.">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <style>
   :root {
@@ -341,7 +341,6 @@
           </div>
           <div class="right">
             <button class="ghost" id="copyBtn">Copy view</button>
-            <button class="ghost" id="dl">CSV</button>
             <button class="primary" id="xlsx">Excel</button>
           </div>
         </div>
@@ -638,10 +637,8 @@ document.getElementById('statusSeg').addEventListener('click', e => {
   render();
 });
 
-function q(s) { return `"${(s == null ? '' : String(s)).replace(/"/g, '""')}"`; }
-
-// Build the export table shared by CSV and Excel. ID columns (conceptId and
-// every description-ID column) are tracked so Excel can format them as Text.
+// Build the Excel export table. ID columns (conceptId and every description-ID
+// column) are tracked so Excel can format them as Text.
 function exportMatrix() {
   const header = ['conceptId'];
   const numCols = new Set([0]);
@@ -672,15 +669,6 @@ function saveBlob(bytes, mime, name) {
   a.download = name;
   a.click();
 }
-
-document.getElementById('dl').addEventListener('click', () => {
-  if (!rows.length) return;
-  const { header, matrix, fname } = exportMatrix();
-  let csv = '﻿' + header.join(',') + '\n';
-  for (const cols of matrix) csv += cols.map(q).join(',') + '\n';
-  saveBlob(csv, 'text/csv;charset=utf-8', fname + '.csv');
-  toast('CSV downloaded — all ' + rows.length + ' rows.');
-});
 
 document.getElementById('xlsx').addEventListener('click', () => {
   if (!rows.length) return;
