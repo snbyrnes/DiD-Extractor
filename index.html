@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DiD Extractor</title>
-<meta name="description" content="Look up terms and description IDs for a list of concept IDs, then export to CSV, Excel or a prefilled translations template.">
+<meta name="description" content="Look up terms and description IDs for a list of concept IDs, then export to CSV or Excel.">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <style>
   :root {
@@ -188,16 +188,6 @@
     border: 1px solid var(--hairline); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px;
   }
 
-  /* ---------- template config ---------- */
-  .cfg { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
-  .cfg label { font-size: 12px; font-weight: 600; color: var(--ink-2); display: flex; flex-direction: column; gap: 5px; }
-  .cfg input, .cfg select {
-    font: 13.5px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
-    padding: 8px 10px; border-radius: 10px;
-    border: 1px solid var(--hairline); background: var(--surface); color: var(--ink);
-  }
-  .cfg input:focus, .cfg select:focus { outline: 2px solid var(--brand-hi); outline-offset: -1px; border-color: transparent; }
-
   /* ---------- loading ---------- */
   #loadCard { display: flex; align-items: center; gap: 14px; }
   .spinner {
@@ -338,46 +328,6 @@
       </div>
     </div>
 
-    <div class="card">
-      <div class="step"><div class="stepnum">3</div><h2>MS translations template</h2>
-        <span class="hint">pick the work-type tabs to prefill on export</span></div>
-      <div class="chips" id="wtChips">
-        <label class="chip on"><input type="checkbox" name="wt" value="Description Additions" checked><span class="box">✓</span>Description Additions</label>
-        <label class="chip"><input type="checkbox" name="wt" value="Description Changes"><span class="box">✓</span>Description Changes</label>
-        <label class="chip"><input type="checkbox" name="wt" value="Description Inactivations"><span class="box">✓</span>Description Inactivations</label>
-        <label class="chip"><input type="checkbox" name="wt" value="Description Replacements"><span class="box">✓</span>Description Replacements</label>
-        <label class="chip"><input type="checkbox" name="wt" value="Bookmark Concepts"><span class="box">✓</span>Bookmark Concepts</label>
-      </div>
-      <div class="cfg">
-        <label>Language reference set
-          <input id="cfgRefset" value="21000220103" spellcheck="false" title="SCTID of the language reference set, e.g. 21000220103 (IE English)">
-        </label>
-        <label>Acceptability
-          <select id="cfgAcc">
-            <option>PREFERRED</option>
-            <option>ACCEPTABLE</option>
-            <option value="">leave blank</option>
-          </select>
-        </label>
-        <label>Language code
-          <input id="cfgLang" value="en" spellcheck="false">
-        </label>
-        <label>Case significance
-          <select id="cfgCase">
-            <option value="">leave blank</option>
-            <option>ci</option>
-            <option>CS</option>
-            <option>cI</option>
-          </select>
-        </label>
-      </div>
-      <div class="hint" style="margin-top:10px">
-        Description-level tabs (Changes / Inactivations / Replacements) get one row per description selected in step 2.
-        Description Additions and Bookmark Concepts get one row per concept.
-        Defaults above prefill the workflow columns; everything stays editable in Excel.
-      </div>
-    </div>
-
     <div id="resultsWrap" style="display:none">
       <div class="tiles" id="tiles"></div>
       <div class="card">
@@ -392,8 +342,7 @@
           <div class="right">
             <button class="ghost" id="copyBtn">Copy view</button>
             <button class="ghost" id="dl">CSV</button>
-            <button class="ghost" id="xlsx">Plain Excel</button>
-            <button class="primary" id="tpl">MS template</button>
+            <button class="primary" id="xlsx">Excel</button>
           </div>
         </div>
         <div class="tablewrap"><table id="tbl"></table></div>
@@ -740,100 +689,6 @@ document.getElementById('xlsx').addEventListener('click', () => {
   saveBlob(bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fname + '.xlsx');
   toast('Excel downloaded — ID columns are Text format.');
 });
-
-/* ---------- MS translations template export ---------- */
-let tplBuf = null;                                   // cached template bytes
-
-// SCTIDs above 15 digits lose precision as Excel numbers, so keep those as text.
-function idCell(id) { return /^\d{1,15}$/.test(id) ? Number(id) : String(id); }
-
-// Descriptions selected in step 2 for one concept, deduped by description ID.
-function descsFor(hit) {
-  const ld = hit.ld || {}, ie = ld[IRISH], us = ld[US];
-  const out = [], seen = new Set();
-  const add = (d, type) => { if (d && !seen.has(d.id)) { seen.add(d.id); out.push({ id: d.id, term: d.text, type }); } };
-  if (lastModes.includes('fsn'))      add((ie && ie.fsn) || (us && us.fsn), 'FSN');
-  if (lastModes.includes('irishPt'))  add(ie && ie.preferredTerm, 'SYNONYM');
-  if (lastModes.includes('irishAcc')) ((ie && ie.acceptableTerms) || []).forEach(d => add(d, 'SYNONYM'));
-  if (lastModes.includes('usPt'))     add(us && us.preferredTerm, 'SYNONYM');
-  return out;
-}
-function conceptPt(hit) {
-  const ld = hit.ld || {}, ie = ld[IRISH], us = ld[US];
-  const d = (ie && ie.preferredTerm) || (us && us.preferredTerm);
-  return d ? d.text : '';
-}
-function conceptFsn(hit) {
-  const ld = hit.ld || {}, ie = ld[IRISH], us = ld[US];
-  const d = (us && us.fsn) || (ie && ie.fsn);
-  return d ? d.text : '';
-}
-
-async function exportTemplate() {
-  if (!rows.length) { toast('Extract descriptions first.'); return; }
-  const wts = [...document.querySelectorAll('#wtChips input:checked')].map(c => c.value);
-  if (!wts.length) { toast('Select at least one work-type tab in step 3.'); return; }
-
-  const rs   = document.getElementById('cfgRefset').value.trim();
-  const acc  = document.getElementById('cfgAcc').value;
-  const lang = document.getElementById('cfgLang').value.trim();
-  const cs   = document.getElementById('cfgCase').value;
-  const rsCell = /^\d{1,15}$/.test(rs) ? Number(rs) : rs;
-  const NOT_FOUND = 'Concept not found in dataset';
-
-  const fills = {};
-  let skipped = 0;
-  for (const wt of wts) {
-    const out = [];
-    for (const r of rows) {
-      const hit = CONCEPTS[r.id];
-      if (wt === 'Bookmark Concepts') {
-        out.push([idCell(r.id), hit ? '' : NOT_FOUND]);
-        continue;
-      }
-      if (wt === 'Description Additions') {
-        if (hit) out.push([idCell(r.id), conceptFsn(hit), conceptPt(hit), '', lang, cs, 'SYNONYM', rsCell, acc]);
-        else out.push([idCell(r.id), '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', NOT_FOUND]);
-        continue;
-      }
-      // description-keyed tabs
-      if (!hit) { skipped++; continue; }
-      for (const d of descsFor(hit)) {
-        if (wt === 'Description Changes')
-          out.push([idCell(d.id), conceptPt(hit), d.term, cs, d.type, rsCell, acc]);
-        else if (wt === 'Description Inactivations')
-          out.push([idCell(d.id), '', idCell(r.id), conceptPt(hit), d.term]);
-        else if (wt === 'Description Replacements')
-          out.push([idCell(r.id), idCell(d.id), conceptPt(hit), d.term, '', '', '', '', '', '', '', '',
-                    lang, cs, d.type, rsCell, acc]);
-      }
-    }
-    fills[wt] = out;
-  }
-
-  const btn = document.getElementById('tpl');
-  btn.disabled = true;
-  try {
-    if (!tplBuf) {
-      toast('Fetching template…');
-      const resp = await fetch('ms-template.xlsx');
-      if (!resp.ok) throw new Error('template fetch failed: HTTP ' + resp.status);
-      tplBuf = await resp.arrayBuffer();
-    }
-    const bytes = await XLSX.fillTemplate(tplBuf, fills);
-    const d = new Date(), pad = n => String(n).padStart(2, '0');
-    saveBlob(bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      `ms-translations_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.xlsx`);
-    let msg = 'Template downloaded — ' + wts.length + ' tab' + (wts.length === 1 ? '' : 's') + ' prefilled.';
-    if (skipped) msg += ' ' + skipped + ' not-found ID' + (skipped === 1 ? '' : 's') + ' skipped on description-level tabs.';
-    toast(msg);
-  } catch (err) {
-    toast('Template export failed: ' + err.message);
-  } finally {
-    btn.disabled = false;
-  }
-}
-document.getElementById('tpl').addEventListener('click', exportTemplate);
 
 document.getElementById('copyBtn').addEventListener('click', () => {
   const v = currentView();

@@ -3,28 +3,13 @@
 A zero-backend web app: paste or upload a list of concept IDs and get the
 matching terms back — **FSN**, **Irish preferred synonym**, **Irish acceptable
 synonyms**, and/or **US English preferred synonym** — each with its
-**description ID (DiD)**. Download the result as CSV, plain Excel, or a
-prefilled **MS translations template**.
+**description ID (DiD)**. Download the result as CSV or Excel.
 
 All lookups run in the browser against a pre-built dataset (`data.json`). There
 is no server; GitHub Pages just serves the static files.
 
 ## Live site
 Published via GitHub Actions to GitHub Pages (see the Actions tab for the URL).
-
-## MS translations template export
-Pick one or more work-type tabs in step 3 and the export fills them from the
-extracted concepts, keeping the template's formatting, dropdowns and Reference
-sheet intact (`ms-template.xlsx`, v2.21):
-
-- **Description Additions** / **Bookmark Concepts** — one row per concept
-  (not-found IDs are included with a note).
-- **Description Changes / Inactivations / Replacements** — one row per
-  description selected in step 2 (not-found IDs are skipped).
-
-The workflow columns (language reference set, acceptability, language code,
-case significance) are prefilled from configurable defaults
-(`21000220103`, `PREFERRED`, `en`, blank).
 
 ## What's in the dataset
 `data.json` contains 33,672 concepts from a single terminology module — for
