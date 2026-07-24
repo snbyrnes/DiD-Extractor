@@ -1,6 +1,7 @@
 /* Minimal dependency-free XLSX writer + template filler.
-   - build(): writes a single-sheet workbook. Numeric columns are written as real
-     number cells with format code "0" (full integer, never scientific).
+   - build(): writes a single-sheet workbook. ID columns (passed in numCols) are
+     written as text cells with format code "@" so Excel preserves every digit
+     exactly — no rounding, scientific notation, or leading-zero loss.
    - fillTemplate(): opens an existing .xlsx (ArrayBuffer), injects data rows into
      named sheets (keeping all other tabs, styles, dropdowns and images), and
      returns the rebuilt file. Uses CompressionStream/DecompressionStream.
@@ -135,7 +136,7 @@
   const STYLES =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<numFmts count="1"><numFmt numFmtId="164" formatCode="0"/></numFmts>' +
+    '<numFmts count="1"><numFmt numFmtId="164" formatCode="@"/></numFmts>' +
     '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
     '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>' +
     '<borders count="1"><border/></borders>' +
@@ -162,7 +163,9 @@
       row.forEach((val, ci) => {
         if (val === '' || val == null) return;              // blank cell
         const ref = colName(ci) + r;
-        if (numCols.has(ci)) xml += `<c r="${ref}" s="1"><v>${val}</v></c>`;
+        // ID columns are written as text (format "@") so Excel keeps every digit
+        // verbatim — no rounding, no scientific notation, no leading-zero loss.
+        if (numCols.has(ci)) xml += `<c r="${ref}" s="1" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(val)}</t></is></c>`;
         else xml += `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(val)}</t></is></c>`;
       });
       xml += '</row>';

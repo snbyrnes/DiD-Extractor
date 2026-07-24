@@ -691,8 +691,8 @@ document.getElementById('statusSeg').addEventListener('click', e => {
 
 function q(s) { return `"${(s == null ? '' : String(s)).replace(/"/g, '""')}"`; }
 
-// Build the export table shared by CSV and Excel. Numeric columns (conceptId and
-// every description-ID column) are tracked so Excel can format them as Number.
+// Build the export table shared by CSV and Excel. ID columns (conceptId and
+// every description-ID column) are tracked so Excel can format them as Text.
 function exportMatrix() {
   const header = ['conceptId'];
   const numCols = new Set([0]);
@@ -738,7 +738,7 @@ document.getElementById('xlsx').addEventListener('click', () => {
   const { header, matrix, numCols, fname } = exportMatrix();
   const bytes = XLSX.build(header, matrix, numCols);
   saveBlob(bytes, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', fname + '.xlsx');
-  toast('Excel downloaded — ID columns are Number format.');
+  toast('Excel downloaded — ID columns are Text format.');
 });
 
 /* ---------- MS translations template export ---------- */
