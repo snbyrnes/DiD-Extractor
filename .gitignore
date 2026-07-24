@@ -1,4 +1,4 @@
-# Local SNOMED CT release files — licensed content, never committed.
+# Terminology release files — licensed content, never committed.
 # The app reads these from the user's own machine at runtime.
 *.zip
 SnomedCT_*/

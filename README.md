@@ -1,56 +1,47 @@
 # DiD Extractor
 
-A zero-backend web app: paste or upload a list of concept IDs and get the
-matching terms back — **FSN**, **Irish preferred synonym**, **Irish acceptable
-synonyms**, and/or **US English preferred synonym** — each with its
-**description ID (DiD)**. Download the result as Excel.
+Bulk lookup of **description IDs (DiDs)** and their terms for a list of concept
+IDs, taken from a terminology code system release you already hold.
 
-**No terminology content ships with this site.** On first use you point the app
-at your own SNOMED CT RF2 release folder; it builds the lookup index in your
-browser and caches it. Nothing is uploaded — there is no server, and GitHub
-Pages only serves the static files.
+Paste or upload your concept IDs, choose which descriptions you want — fully
+specified name, preferred synonyms, acceptable synonyms — and export the result
+to Excel, with every ID written as text so long identifiers keep all their
+digits.
 
-## Live site
-Published via GitHub Actions to GitHub Pages (see the Actions tab for the URL).
+## How it works
 
-## First run
-1. Download your release and extract the zip anywhere on your PC.
-2. Open the site and click **Choose release folder…**, then select the
-   extracted folder — the one containing `Snapshot`, or any folder above it.
-3. Grant read access when the browser asks.
+The site ships no terminology content and has no server. On first use you point
+it at your own extracted release folder; it reads the RF2 snapshot files, builds
+the lookup index **in the browser**, and caches it so later visits open straight
+to the lookup screen.
 
-Building takes a few seconds, after which the dataset is cached in the browser
-and the app opens straight to the lookup screen. In Chrome and Edge the folder
-itself is remembered, so a **rebuild** for a newer release is one click. Firefox
-and Safari work too, but ask for the folder again whenever you rebuild.
+Nothing you select ever leaves your machine.
 
-Footer controls: **rebuild** (re-read the same folder), **change folder**
-(switch releases) and **forget** (clear the cached dataset from the browser).
+Chrome and Edge remember the folder, so refreshing to a newer release is one
+click. Other browsers work too, but ask for the folder each time it is rebuilt.
 
-## What it reads
-Three Snapshot files, found by name anywhere under the folder you pick
-(`Full/` and `Delta/` are ignored):
+## Using it
 
-| File | Used for |
+Full step-by-step instructions — from downloading a release package through to
+extracting descriptions — are built into the app: click **?** in the header, or
+**How do I get these files?** on the start screen.
+
+In short: download and extract a release, click **Choose release folder…**,
+select the extracted folder, and wait a few seconds while the index builds.
+
+## Files
+
+| | |
 | --- | --- |
-| `sct2_Concept_Snapshot…txt` | concept list, active flag, effectiveTime |
-| `sct2_Description_Snapshot…txt` | terms, description IDs, description type |
-| `der2_cRefset_LanguageSnapshot…txt` | FSN / preferred / acceptable per language reference set |
+| `index.html` | the whole UI and app logic |
+| `rf2.js` | release discovery, streaming parser, index cache |
+| `xlsx.js` | minimal dependency-free Excel writer |
 
-The language reference set is large (~158 MB, 1.6M rows in the IE release), so
-every file is streamed and parsed a chunk at a time rather than read into memory
-whole.
-
-Concepts are indexed for one module at a time, defaulting to `1601000220105`.
-If the release contains other modules a selector appears in the footer; IDs
-outside the selected module report "concept not found".
+No build step and no dependencies — it is a static site, deployed to GitHub
+Pages by the workflow in `.github/workflows/`.
 
 ## Licensing
-Because the app reads a release supplied by the user at runtime, this repository
-distributes no licensed terminology content. Users are responsible for holding a
-valid licence for the release files they load.
 
-## Legacy build tooling
-`build/BuildData.java` predates the local-folder approach — it generated the
-`data.json` the site used to ship. It is no longer used by the app and is kept
-only for reference.
+Because the release is supplied by the user at runtime, this repository
+distributes no licensed terminology content. Users are responsible for holding a
+valid licence for the release they load.
