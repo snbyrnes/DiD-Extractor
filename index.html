@@ -306,6 +306,54 @@
   footer { max-width: 1160px; margin: 0 auto; padding: 0 24px 40px; color: var(--muted); font-size: 12.5px; }
   footer a { color: var(--brand-hi); }
 
+  /* ---------- instructions modal ---------- */
+  dialog#helpDlg {
+    width: min(720px, calc(100vw - 32px)); max-height: min(86vh, 900px);
+    padding: 0; border: 1px solid var(--ring); border-radius: 16px;
+    background: var(--surface); color: var(--ink);
+    box-shadow: 0 10px 40px rgba(0,0,0,.28); overflow: hidden;
+  }
+  dialog#helpDlg::backdrop { background: rgba(0,0,0,.45); backdrop-filter: blur(2px); }
+  .dlghead {
+    display: flex; align-items: center; gap: 12px;
+    padding: 18px 20px; border-bottom: 1px solid var(--hairline);
+    position: sticky; top: 0; background: var(--surface);
+  }
+  .dlghead h2 { font-size: 17px; font-weight: 700; letter-spacing: -.01em; flex: 1; }
+  .dlgbody { padding: 20px; overflow-y: auto; max-height: calc(86vh - 148px); }
+  .dlgfoot {
+    display: flex; justify-content: flex-end; gap: 10px;
+    padding: 14px 20px; border-top: 1px solid var(--hairline); background: var(--surface-2);
+  }
+  .phase {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--brand-hi); margin: 22px 0 10px;
+  }
+  .phase:first-child { margin-top: 0; }
+  .phase::after { content: ''; flex: 1; height: 1px; background: var(--hairline); }
+  .howto { margin: 0; padding: 0; list-style: none; counter-reset: h; }
+  .howto li {
+    position: relative; counter-increment: h;
+    padding: 0 0 16px 38px; font-size: 13.5px; line-height: 1.6; color: var(--ink-2);
+  }
+  .howto li::before {
+    content: counter(h); position: absolute; left: 0; top: -1px;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--brand); color: var(--brand-ink);
+    font-size: 12px; font-weight: 700; display: grid; place-items: center;
+  }
+  .howto li:not(:last-child)::after {
+    content: ''; position: absolute; left: 11.5px; top: 26px; bottom: 4px;
+    width: 1px; background: var(--hairline);
+  }
+  .howto b { color: var(--ink); }
+  .howto code {
+    font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace;
+    background: var(--hairline); padding: 1px 6px; border-radius: 6px; word-break: break-word;
+  }
+  .howto .sub { display: block; color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+
   /* ---------- toast ---------- */
   #toast {
     position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(80px);
@@ -326,8 +374,63 @@
   </div>
   <div class="spacer"></div>
   <span class="pill" id="editionPill">loading…</span>
+  <button class="iconbtn" id="helpBtn" title="How to download and load a release" aria-label="Instructions">?</button>
   <button class="iconbtn" id="themeBtn" title="Toggle light / dark theme" aria-label="Toggle theme">◐</button>
 </div>
+
+<dialog id="helpDlg" aria-labelledby="helpTitle">
+  <div class="dlghead">
+    <h2 id="helpTitle">Getting a release and loading it</h2>
+    <button class="iconbtn" id="helpClose" aria-label="Close instructions">✕</button>
+  </div>
+  <div class="dlgbody">
+
+    <div class="phase">Part 1 · download the release</div>
+    <ol class="howto">
+      <li>Sign in to the <b>Authoring Platform</b>.</li>
+      <li>Select your <b>code system</b>.
+        <span class="sub">e.g. SNOMEDCT-IE for the Irish edition.</span></li>
+      <li>Open the <b>Daily Build validation report</b>.</li>
+      <li><b>Download the package</b> — this is the release <code>.zip</code>.
+        <span class="sub">Around 55 MB; it is the full RF2 Snapshot.</span></li>
+      <li>Save it to a folder you will remember.
+        <span class="sub">Somewhere stable such as <code>Documents\SNOMED releases</code> — not your Downloads folder, so it does not get cleared.</span></li>
+      <li><b>Extract the zip.</b> Right-click → <i>Extract All…</i>
+        <span class="sub">You should end up with a folder named like
+          <code>SnomedCT_ManagedServiceIE_…</code> containing a <code>Snapshot</code> folder.
+          The app reads the extracted files, not the zip.</span></li>
+    </ol>
+
+    <div class="phase">Part 2 · load it into DiD Extractor</div>
+    <ol class="howto" style="counter-reset: h 6">
+      <li>Click <b>Choose release folder…</b> on the start screen.</li>
+      <li>Select the <b>extracted folder</b>.
+        <span class="sub">Pick the folder containing <code>Snapshot</code>, or any folder above it — the app searches inside for the files it needs.</span></li>
+      <li>Allow read access when the browser asks.
+        <span class="sub">Chrome and Edge show a <i>View files</i> confirmation. Nothing is uploaded — the files are read on your machine.</span></li>
+      <li>Wait for the build to finish.
+        <span class="sub">Each step is ticked off as it completes. The language reference set is ~158 MB and takes the longest.</span></li>
+      <li>Paste or drop in your <b>concept IDs</b>, pick which descriptions you want, then <b>Extract descriptions</b>.</li>
+    </ol>
+
+    <div class="phase">Later visits</div>
+    <ol class="howto" style="counter-reset: h 11">
+      <li>The dataset is cached, so the app opens straight to the lookup screen.</li>
+      <li>For a newer release, use the footer links: <b>rebuild</b> re-reads the same folder,
+        <b>change folder</b> points at a different release, <b>forget</b> clears the cache.
+        <span class="sub">Chrome and Edge remember the folder; other browsers ask for it again.</span></li>
+    </ol>
+
+    <div class="srcnote" style="margin-bottom:0">
+      <div class="big">🔒</div>
+      <div>Your release never leaves your machine. The site ships no terminology
+        content and has no server — everything is read and indexed in the browser.</div>
+    </div>
+  </div>
+  <div class="dlgfoot">
+    <button class="primary" id="helpDone">Got it</button>
+  </div>
+</dialog>
 
 <main>
   <div class="card" id="loadCard">
@@ -365,6 +468,7 @@
 
     <div class="actions">
       <button class="primary" id="pickBtn">Choose release folder…</button>
+      <button class="ghost" id="helpBtn2">How do I get these files?</button>
       <span class="hint" id="pickHint"></span>
     </div>
     <input type="file" id="pickInput" webkitdirectory directory multiple hidden>
@@ -481,6 +585,17 @@ themeBtn.addEventListener('click', () => {
   document.documentElement.dataset.theme = next;
   localStorage.setItem('theme', next);
 });
+
+/* ---------- instructions modal ---------- */
+const helpDlg = document.getElementById('helpDlg');
+const openHelp = () => { if (!helpDlg.open) helpDlg.showModal(); };
+const closeHelp = () => { if (helpDlg.open) helpDlg.close(); };
+document.getElementById('helpBtn').addEventListener('click', openHelp);
+document.getElementById('helpBtn2').addEventListener('click', openHelp);
+document.getElementById('helpClose').addEventListener('click', closeHelp);
+document.getElementById('helpDone').addEventListener('click', closeHelp);
+// clicking the backdrop (outside the panel) closes it; Esc is handled natively
+helpDlg.addEventListener('click', e => { if (e.target === helpDlg) closeHelp(); });
 
 /* ---------- toast ---------- */
 let toastT;
@@ -825,7 +940,9 @@ function extract() {
   document.getElementById('resultsWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 document.getElementById('go').addEventListener('click', extract);
-document.addEventListener('keydown', e => { if (e.ctrlKey && e.key === 'Enter') extract(); });
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'Enter' && !helpDlg.open) extract();
+});
 
 /* ---------- status ---------- */
 function rowStatus(r) {
