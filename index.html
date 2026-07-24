@@ -196,9 +196,26 @@
     animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(1turn); } }
-  #loadCard .grow { flex: 1; min-width: 0; }
-  .bar { height: 6px; border-radius: 99px; background: var(--hairline); overflow: hidden; margin-top: 10px; }
+  #loadCard { display: block; }
+  .loadhead { display: flex; align-items: center; gap: 14px; }
+  .loadhead .grow { flex: 1; min-width: 0; }
+  .pct { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .bar { height: 6px; border-radius: 99px; background: var(--hairline); overflow: hidden; margin-top: 12px; }
   .bar > span { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--brand); transition: width .2s; }
+
+  /* build step checklist */
+  .steplist { list-style: none; margin: 16px 0 0; padding: 14px 0 0; border-top: 1px solid var(--hairline); }
+  .steplist li {
+    display: flex; align-items: baseline; gap: 10px; padding: 4px 0;
+    font-size: 13.5px; color: var(--muted);
+  }
+  .steplist li .mark { width: 16px; flex: none; text-align: center; font-size: 12px; }
+  .steplist li .what { font-weight: 550; }
+  .steplist li .det { color: var(--muted); font-size: 12.5px; margin-left: auto; text-align: right; }
+  .steplist li.on  { color: var(--ink); }
+  .steplist li.on .mark { color: var(--brand-hi); }
+  .steplist li.ok  { color: var(--ink-2); }
+  .steplist li.ok .mark { color: var(--good); }
 
   /* ---------- local release source ---------- */
   .srcnote {
@@ -314,12 +331,16 @@
 
 <main>
   <div class="card" id="loadCard">
-    <div class="spinner" id="loadSpin"></div>
-    <div class="grow">
-      <b id="loadTitle">Looking for a saved dataset…</b>
-      <div class="hint" id="loadDetail"></div>
-      <div class="bar" id="loadBar" style="display:none"><span></span></div>
+    <div class="loadhead">
+      <div class="spinner" id="loadSpin"></div>
+      <div class="grow">
+        <b id="loadTitle">Looking for a saved dataset…</b>
+        <div class="hint" id="loadDetail"></div>
+      </div>
+      <div class="pct" id="loadPct"></div>
     </div>
+    <div class="bar" id="loadBar" style="display:none"><span></span></div>
+    <ol class="steplist" id="stepList" style="display:none"></ol>
   </div>
 
   <div class="card" id="sourceCard" style="display:none">
@@ -486,16 +507,53 @@ function setLoad(title, detail, frac) {
   document.getElementById('loadTitle').textContent = title;
   document.getElementById('loadDetail').textContent = detail || '';
   const bar = document.getElementById('loadBar');
+  const pct = document.getElementById('loadPct');
   if (typeof frac === 'number' && isFinite(frac)) {
     bar.style.display = '';
     bar.firstElementChild.style.width = Math.max(0, Math.min(1, frac)) * 100 + '%';
+    pct.textContent = Math.round(Math.max(0, Math.min(1, frac)) * 100) + '%';
   } else {
     bar.style.display = 'none';
+    pct.textContent = '';
   }
+}
+
+/* The build runs through fixed steps; show them all up front and tick each one
+   off, so a long file read never looks like nothing is happening. */
+const STEP_ROWS = RF2.STEPS.concat([{ key: 'save', label: 'Saving to browser cache' }]);
+
+function initSteps() {
+  const list = document.getElementById('stepList');
+  list.innerHTML = '';
+  for (const s of STEP_ROWS) {
+    const li = document.createElement('li');
+    li.id = 'step-' + s.key;
+    li.innerHTML = '<span class="mark">○</span><span class="what"></span><span class="det"></span>';
+    li.querySelector('.what').textContent = s.label;
+    list.appendChild(li);
+  }
+  list.style.display = '';
+}
+
+function markStep(key, detail, frac) {
+  const idx = STEP_ROWS.findIndex(s => s.key === key);
+  if (idx < 0) return;
+  STEP_ROWS.forEach((s, i) => {
+    const li = document.getElementById('step-' + s.key);
+    if (!li) return;
+    const done = i < idx || (i === idx && frac >= 1);
+    li.classList.toggle('ok', done);
+    li.classList.toggle('on', i === idx && !done);
+    li.querySelector('.mark').textContent = done ? '✓' : (i === idx ? '●' : '○');
+    if (i === idx) li.querySelector('.det').textContent = detail || '';
+    else if (i > idx) li.querySelector('.det').textContent = '';
+  });
 }
 
 function showSource(message) {
   loadCard.style.display = 'none';
+  document.getElementById('stepList').style.display = 'none';
+  document.getElementById('loadPct').textContent = '';
   sourceCard.style.display = '';
   document.getElementById('app').style.display = 'none';
   document.getElementById('editionPill').textContent = 'no dataset';
@@ -544,22 +602,41 @@ function activate(data) {
 }
 
 async function buildFrom(source, moduleId) {
-  setLoad('Reading release…', 'this runs entirely on your machine');
-  await new Promise(r => setTimeout(r));            // let the card paint
+  // Hide the picker while building, otherwise the page looks unchanged.
+  sourceCard.style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  srcErr.style.display = 'none';
+  document.getElementById('editionPill').textContent = 'building…';
+  initSteps();
+  setLoad('Building dataset…', 'this runs entirely on your machine', 0);
+  loadCard.scrollIntoView({ block: 'center' });
+  await new Promise(r => setTimeout(r, 30));        // let the card paint first
+
+  const t0 = Date.now();
   try {
     const data = await RF2.build(source, {
       module: moduleId,
-      onProgress: (stage, detail, frac) => setLoad(stage + '…', detail, frac)
+      onProgress: p => {
+        markStep(p.step, p.detail, p.frac);
+        const s = RF2.STEPS.find(x => x.key === p.step);
+        setLoad(s ? s.label + '…' : 'Building dataset…', p.detail, p.overall);
+      }
     });
-    setLoad('Saving…', 'caching so this is a one-time step');
-    try {
-      await RF2.cache.put(data);
-    } catch (e) {
-      toast('Built, but caching failed — it will rebuild next visit.');
-    }
+
+    markStep('save', 'writing…', 0);
+    setLoad('Saving to browser cache…', 'so this is a one-time step', 1);
+    await new Promise(r => setTimeout(r, 30));
+    let cached = true;
+    try { await RF2.cache.put(data); }
+    catch (e) { cached = false; }
+    markStep('save', cached ? 'done' : 'unavailable', 1);
+
     activate(data);
-    toast('Dataset built — ' + Object.keys(data.concepts).length.toLocaleString() + ' concepts.');
+    const secs = ((Date.now() - t0) / 1000).toFixed(1);
+    toast(Object.keys(data.concepts).length.toLocaleString() + ' concepts ready in ' + secs + 's' +
+      (cached ? '.' : ' — caching unavailable, will rebuild next visit.'));
   } catch (err) {
+    document.getElementById('stepList').style.display = 'none';
     showSource(String(err && err.message || err));
   }
 }
@@ -573,12 +650,16 @@ async function ensureAccess(h) {
 }
 
 async function chooseFolder() {
-  if (!RF2.supportsPicker) { document.getElementById('pickInput').click(); return; }
+  if (!RF2.supportsPicker) {
+    toast('Choose the extracted release folder…');
+    document.getElementById('pickInput').click();
+    return;
+  }
   let handle;
   try {
     handle = await showDirectoryPicker({ id: 'snomed-release', mode: 'read' });
   } catch (err) {
-    if (err && err.name === 'AbortError') return;   // user cancelled
+    if (err && err.name === 'AbortError') { toast('Folder selection cancelled.'); return; }
     showSource(String(err.message || err));
     return;
   }
@@ -590,7 +671,8 @@ async function chooseFolder() {
 document.getElementById('pickBtn').addEventListener('click', chooseFolder);
 document.getElementById('pickInput').addEventListener('change', e => {
   const files = e.target.files;
-  if (files && files.length) buildFrom(files, dataset && dataset.module);
+  if (!files || !files.length) { toast('No folder selected.'); return; }
+  buildFrom(files, dataset && dataset.module);
   e.target.value = '';
 });
 

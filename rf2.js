@@ -135,17 +135,48 @@
 
   // ---- build ----
 
-  // opts: { module, onProgress(stage, detail) }
+  // The steps the caller can render, in order.
+  const STEPS = [
+    { key: 'scan',         label: 'Finding release files' },
+    { key: 'concepts',     label: 'Reading concepts' },
+    { key: 'descriptions', label: 'Reading descriptions' },
+    { key: 'language',     label: 'Reading language reference set' },
+    { key: 'index',        label: 'Building index' }
+  ];
+
+  // opts: { module, onProgress({ step, detail, frac, overall }) }
   async function build(dir, opts) {
     opts = opts || {};
-    const say = opts.onProgress || function () {};
-    const files = await findFiles(dir, d => say('Scanning release', d));
+    const emit = (step, detail, frac, overall) => {
+      if (opts.onProgress) opts.onProgress({ step, detail, frac, overall });
+    };
 
+    emit('scan', 'looking for RF2 Snapshot files…', null, 0);
+    await tick();
+    const files = await findFiles(dir, d => emit('scan', d, null, 0));
+
+    // Resolve every File up front so the total byte count — and therefore an
+    // honest overall percentage — is known before any parsing starts.
     const conceptFile = await files.concept.getFile();
+    const descFiles = [];
+    for (const e of files.description) descFiles.push(await e.getFile());
+    const langFiles = [];
+    for (const e of files.language) langFiles.push(await e.getFile());
+
+    const total = conceptFile.size +
+      descFiles.reduce((n, f) => n + f.size, 0) +
+      langFiles.reduce((n, f) => n + f.size, 0);
+    let doneBytes = 0;
+    const overallAt = b => total ? (doneBytes + b) / total : 0;
+
+    emit('scan', descFiles.length + langFiles.length + 1 + ' files · ' + mb(total) + ' MB to read', 1, 0);
+    await tick();
+
     const version = versionFrom(files.concept.name) || versionFrom(conceptFile.name);
 
     // 1. concepts, grouped by module so the caller can offer a choice
-    say('Reading concepts', conceptFile.name);
+    emit('concepts', conceptFile.name, 0, overallAt(0));
+    await tick();
     const byModule = new Map();
     let header = true;
     await eachLine(conceptFile, line => {
@@ -156,7 +187,8 @@
       let m = byModule.get(mod);
       if (!m) { m = new Map(); byModule.set(mod, m); }
       m.set(id, { a: field(line, 2) === '1' ? 'T' : 'F', e: field(line, 1), d: '', ld: {} });
-    });
+    }, b => emit('concepts', mb(b) + ' of ' + mb(conceptFile.size) + ' MB', b / conceptFile.size, overallAt(b)));
+    doneBytes += conceptFile.size;
 
     const modules = [...byModule.entries()]
       .map(([id, m]) => ({ id, count: m.size }))
@@ -166,12 +198,14 @@
     if (!module) throw new Error('No concepts found in the release.');
     const concepts = byModule.get(module);
     byModule.clear();
+    emit('concepts', concepts.size.toLocaleString() + ' concepts in module ' + module, 1, overallAt(0));
+    await tick();
 
     // 2. active descriptions belonging to those concepts
     const descs = new Map();
-    for (const entry of files.description) {
-      const f = await entry.getFile();
-      say('Reading descriptions', f.name);
+    for (const f of descFiles) {
+      emit('descriptions', f.name, 0, overallAt(0));
+      await tick();
       let head = true;
       await eachLine(f, line => {
         if (head) { head = false; return; }
@@ -184,13 +218,16 @@
           typeId: field(line, 6),
           text: field(line, 7)
         });
-      }, b => say('Reading descriptions', mb(b) + ' of ' + mb(f.size) + ' MB', b / f.size));
+      }, b => emit('descriptions', mb(b) + ' of ' + mb(f.size) + ' MB', b / f.size, overallAt(b)));
+      doneBytes += f.size;
     }
+    emit('descriptions', descs.size.toLocaleString() + ' descriptions kept', 1, overallAt(0));
+    await tick();
 
     // 3. language refset decides FSN / preferred / acceptable per refset
-    for (const entry of files.language) {
-      const f = await entry.getFile();
-      say('Reading language refset', f.name);
+    for (const f of langFiles) {
+      emit('language', f.name + ' — ' + mb(f.size) + ' MB, this is the big one', 0, overallAt(0));
+      await tick();
       let head = true;
       await eachLine(f, line => {
         if (head) { head = false; return; }
@@ -210,11 +247,13 @@
         } else {
           if (preferred) slot.preferredTerm = rec; else slot.acceptableTerms.push(rec);
         }
-      }, b => say('Reading language refset', mb(b) + ' of ' + mb(f.size) + ' MB', b / f.size));
+      }, b => emit('language', mb(b) + ' of ' + mb(f.size) + ' MB', b / f.size, overallAt(b)));
+      doneBytes += f.size;
     }
 
     // 4. display term, mirroring how the app resolves it
-    say('Finishing', '');
+    emit('index', 'resolving display terms…', 0, 1);
+    await tick();
     const out = {};
     for (const [id, con] of concepts) {
       const ie = con.ld[IRISH], us = con.ld[US];
@@ -222,6 +261,7 @@
       con.d = p ? p.text : '';
       out[id] = con;
     }
+    emit('index', concepts.size.toLocaleString() + ' concepts indexed', 1, 1);
 
     return { version, module, modules, concepts: out, builtAt: Date.now() };
   }
@@ -259,5 +299,5 @@
     clearDir: ()=> kv('readwrite', s => s.delete('dir'))
   };
 
-  root.RF2 = { build, cache, DEFAULT_MODULE, supportsPicker: typeof root.showDirectoryPicker === 'function' };
+  root.RF2 = { build, cache, STEPS, DEFAULT_MODULE, supportsPicker: typeof root.showDirectoryPicker === 'function' };
 })(typeof self !== 'undefined' ? self : this);
